@@ -1,0 +1,535 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* VaranApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* VaranApp.swift */; };
+		A10000000000000000000002 /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* AppShellView.swift */; };
+		A10000000000000000000003 /* ServerAddress.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* ServerAddress.swift */; };
+		A10000000000000000000004 /* KomodoAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* KomodoAPIClient.swift */; };
+		A10000000000000000000005 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* KeychainStore.swift */; };
+		A10000000000000000000006 /* ConnectionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* ConnectionEditorView.swift */; };
+		A10000000000000000000007 /* ServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* ServerAddressTests.swift */; };
+		A10000000000000000000008 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* XCTest.framework */; };
+		A10000000000000000000009 /* KomodoAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* KomodoAPIClientTests.swift */; };
+		A1000000000000000000000A /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000D /* KeychainStoreTests.swift */; };
+		A1000000000000000000000B /* ServerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ServerProfile.swift */; };
+		A1000000000000000000000C /* StoredCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* StoredCredentials.swift */; };
+		A1000000000000000000000D /* KomodoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* KomodoModels.swift */; };
+		A1000000000000000000000F /* PersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* PersistenceTests.swift */; };
+		A1000000000000000000000E /* StackListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* StackListView.swift */; };
+		A10000000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* Assets.xcassets */; };
+		A10000000000000000000011 /* StackDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* StackDetailView.swift */; };
+		A10000000000000000000012 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* Localizable.xcstrings */; };
+		A10000000000000000000013 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* InfoPlist.strings */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10000000000000000000001;
+			remoteInfo = Varan;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		B10000000000000000000001 /* VaranApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaranApp.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* ServerAddress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAddress.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* KomodoAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KomodoAPIClient.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000006 /* ConnectionEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionEditorView.swift; sourceTree = "<group>"; };
+		B10000000000000000000007 /* ServerAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAddressTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000008 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		B10000000000000000000009 /* Varan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Varan.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000000000000000000000A /* VaranTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VaranTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000000000000000000000B /* Varan.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Varan.entitlements; sourceTree = "<group>"; };
+		B1000000000000000000000C /* KomodoAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KomodoAPIClientTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000000D /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000000E /* ServerProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProfile.swift; sourceTree = "<group>"; };
+		B1000000000000000000000F /* StoredCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredCredentials.swift; sourceTree = "<group>"; };
+		B10000000000000000000010 /* KomodoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KomodoModels.swift; sourceTree = "<group>"; };
+		B10000000000000000000012 /* PersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000011 /* StackListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackListView.swift; sourceTree = "<group>"; };
+		B10000000000000000000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B10000000000000000000015 /* StackDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackDetailView.swift; sourceTree = "<group>"; };
+		B10000000000000000000016 /* LocalOverrides.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration/LocalOverrides.xcconfig; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000017 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		B10000000000000000000018 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B10000000000000000000019 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000008 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D10000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000016 /* LocalOverrides.xcconfig */,
+				D10000000000000000000003 /* Varan */,
+				D1000000000000000000000A /* VaranTests */,
+				D1000000000000000000000B /* Frameworks */,
+				D1000000000000000000000C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D10000000000000000000003 /* Varan */ = {
+			isa = PBXGroup;
+			children = (
+				D10000000000000000000004 /* App */,
+				D10000000000000000000005 /* Core */,
+				D10000000000000000000008 /* Features */,
+				D10000000000000000000009 /* Resources */,
+			);
+			path = Varan;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000001 /* VaranApp.swift */,
+				B10000000000000000000002 /* AppShellView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000005 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				D10000000000000000000006 /* API */,
+				D10000000000000000000007 /* Persistence */,
+				D1000000000000000000000D /* Security */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000006 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000004 /* KomodoAPIClient.swift */,
+				B10000000000000000000010 /* KomodoModels.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000007 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000003 /* ServerAddress.swift */,
+				B1000000000000000000000E /* ServerProfile.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000008 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				D1000000000000000000000E /* Connections */,
+				D1000000000000000000000F /* Stacks */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000009 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000013 /* Assets.xcassets */,
+				B10000000000000000000014 /* Info.plist */,
+				B1000000000000000000000B /* Varan.entitlements */,
+				B10000000000000000000017 /* Localizable.xcstrings */,
+				B1000000000000000000001A /* InfoPlist.strings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000A /* VaranTests */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000007 /* ServerAddressTests.swift */,
+				B1000000000000000000000C /* KomodoAPIClientTests.swift */,
+				B1000000000000000000000D /* KeychainStoreTests.swift */,
+				B10000000000000000000012 /* PersistenceTests.swift */,
+			);
+			path = VaranTests;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000008 /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000009 /* Varan.app */,
+				B1000000000000000000000A /* VaranTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000D /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000005 /* KeychainStore.swift */,
+				B1000000000000000000000F /* StoredCredentials.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000E /* Connections */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000006 /* ConnectionEditorView.swift */,
+			);
+			path = Connections;
+			sourceTree = "<group>";
+		};
+		D1000000000000000000000F /* Stacks */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000011 /* StackListView.swift */,
+				B10000000000000000000015 /* StackDetailView.swift */,
+			);
+			path = Stacks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E10000000000000000000001 /* Varan */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E10000000000000000000003 /* Build configuration list for PBXNativeTarget "Varan" */;
+			buildPhases = (
+				F10000000000000000000003 /* Sources */,
+				F10000000000000000000001 /* Frameworks */,
+				F10000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Varan;
+			productName = Varan;
+			productReference = B10000000000000000000009 /* Varan.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E10000000000000000000002 /* VaranTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E10000000000000000000004 /* Build configuration list for PBXNativeTarget "VaranTests" */;
+			buildPhases = (
+				F10000000000000000000004 /* Sources */,
+				F10000000000000000000002 /* Frameworks */,
+				F10000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C10000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = VaranTests;
+			productName = VaranTests;
+			productReference = B1000000000000000000000A /* VaranTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D10000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					E10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					E10000000000000000000002 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = E10000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = E10000000000000000000005 /* Build configuration list for PBXProject "Varan" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				en,
+				Base,
+			);
+			mainGroup = D10000000000000000000002;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D1000000000000000000000C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E10000000000000000000001 /* Varan */,
+				E10000000000000000000002 /* VaranTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F10000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000010 /* Assets.xcassets in Resources */,
+				A10000000000000000000012 /* Localizable.xcstrings in Resources */,
+				A10000000000000000000013 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* VaranApp.swift in Sources */,
+				A10000000000000000000002 /* AppShellView.swift in Sources */,
+				A10000000000000000000003 /* ServerAddress.swift in Sources */,
+				A10000000000000000000004 /* KomodoAPIClient.swift in Sources */,
+				A10000000000000000000005 /* KeychainStore.swift in Sources */,
+				A10000000000000000000006 /* ConnectionEditorView.swift in Sources */,
+				A1000000000000000000000B /* ServerProfile.swift in Sources */,
+				A1000000000000000000000C /* StoredCredentials.swift in Sources */,
+				A1000000000000000000000D /* KomodoModels.swift in Sources */,
+				A1000000000000000000000E /* StackListView.swift in Sources */,
+				A10000000000000000000011 /* StackDetailView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000007 /* ServerAddressTests.swift in Sources */,
+				A10000000000000000000009 /* KomodoAPIClientTests.swift in Sources */,
+				A1000000000000000000000A /* KeychainStoreTests.swift in Sources */,
+				A1000000000000000000000F /* PersistenceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C10000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E10000000000000000000001 /* Varan */;
+			targetProxy = C10000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		B1000000000000000000001A /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B10000000000000000000018 /* InfoPlist.strings */,
+				B10000000000000000000019 /* InfoPlist.strings */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		E20000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		E20000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		E20000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B10000000000000000000016 /* LocalOverrides.xcconfig */;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Varan/Resources/Varan.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Varan/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E20000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B10000000000000000000016 /* LocalOverrides.xcconfig */;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Varan/Resources/Varan.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Varan/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E20000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B10000000000000000000016 /* LocalOverrides.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.example.VaranTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphonesimulator macosx";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Varan.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Varan";
+			};
+			name = Debug;
+		};
+		E20000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B10000000000000000000016 /* LocalOverrides.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.example.VaranTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphonesimulator macosx";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Varan.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Varan";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E10000000000000000000003 /* Build configuration list for PBXNativeTarget "Varan" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E20000000000000000000003 /* Debug */,
+				E20000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E10000000000000000000004 /* Build configuration list for PBXNativeTarget "VaranTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E20000000000000000000005 /* Debug */,
+				E20000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E10000000000000000000005 /* Build configuration list for PBXProject "Varan" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E20000000000000000000001 /* Debug */,
+				E20000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D10000000000000000000001 /* Project object */;
+}

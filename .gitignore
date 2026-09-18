@@ -1,0 +1,8 @@
+DerivedData/
+build/
+*.xcresult
+*.xcuserstate
+xcuserdata/
+.DS_Store
+TODO.md
+Configuration/Developer.xcconfig
