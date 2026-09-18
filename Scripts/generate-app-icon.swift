@@ -9,10 +9,8 @@ import UniformTypeIdentifiers
 private struct Palette {
   let backgroundTop: CGColor
   let backgroundBottom: CGColor
-  let layers: [CGColor]
-  let edge: CGColor
-  let signal: CGColor
-  let signalRing: CGColor
+  let layerTops: [CGColor]
+  let layerBottoms: [CGColor]
 }
 
 private enum IconGeneratorError: LocalizedError {
@@ -47,28 +45,22 @@ private func color(_ red: Int, _ green: Int, _ blue: Int, alpha: CGFloat = 1) ->
 private let defaultPalette = Palette(
   backgroundTop: color(48, 54, 63),
   backgroundBottom: color(25, 29, 35),
-  layers: [color(215, 73, 69), color(239, 102, 85), color(255, 139, 113)],
-  edge: color(255, 224, 207, alpha: 0.28),
-  signal: color(82, 211, 142),
-  signalRing: color(235, 250, 241)
+  layerTops: [color(232, 82, 74), color(255, 113, 91), color(255, 154, 126)],
+  layerBottoms: [color(211, 73, 69), color(239, 102, 85), color(255, 139, 113)]
 )
 
 private let darkPalette = Palette(
   backgroundTop: color(23, 27, 33),
   backgroundBottom: color(8, 11, 15),
-  layers: [color(184, 52, 53), color(226, 78, 68), color(255, 116, 94)],
-  edge: color(255, 222, 207, alpha: 0.24),
-  signal: color(76, 231, 143),
-  signalRing: color(18, 27, 23)
+  layerTops: [color(204, 60, 59), color(240, 91, 77), color(255, 133, 108)],
+  layerBottoms: [color(184, 52, 53), color(226, 78, 68), color(255, 116, 94)]
 )
 
 private let tintedPalette = Palette(
   backgroundTop: color(50, 50, 52),
   backgroundBottom: color(17, 17, 18),
-  layers: [color(126, 126, 130), color(178, 178, 183), color(231, 231, 235)],
-  edge: color(255, 255, 255, alpha: 0.22),
-  signal: color(255, 255, 255),
-  signalRing: color(44, 44, 46)
+  layerTops: [color(147, 147, 151), color(196, 196, 201), color(243, 243, 247)],
+  layerBottoms: [color(126, 126, 130), color(178, 178, 183), color(231, 231, 235)]
 )
 
 private let macIconCornerRadius: CGFloat = 328
@@ -119,34 +111,46 @@ private func renderIcon(
   )
 
   let layerRects = [
-    CGRect(x: 170, y: 214, width: 684, height: 152),
-    CGRect(x: 170, y: 430, width: 684, height: 152),
-    CGRect(x: 170, y: 646, width: 684, height: 152),
+    CGRect(x: 248, y: 220, width: 528, height: 164),
+    CGRect(x: 240, y: 430, width: 544, height: 164),
+    CGRect(x: 248, y: 640, width: 528, height: 164),
   ]
 
   for (index, rect) in layerRects.enumerated() {
+    let path = CGPath(
+      roundedRect: rect,
+      cornerWidth: 56,
+      cornerHeight: 56,
+      transform: nil
+    )
+
     context.saveGState()
     context.setShadow(
-      offset: CGSize(width: 0, height: -18),
-      blur: 24,
-      color: color(0, 0, 0, alpha: 0.28)
+      offset: CGSize(width: 0, height: -14),
+      blur: 28,
+      color: color(0, 0, 0, alpha: 0.22)
     )
-    context.setFillColor(palette.layers[index])
-    context.addPath(CGPath(roundedRect: rect, cornerWidth: 46, cornerHeight: 46, transform: nil))
+    context.setFillColor(palette.layerBottoms[index])
+    context.addPath(path)
     context.fillPath()
     context.restoreGState()
 
-    let highlight = CGRect(x: rect.minX + 45, y: rect.maxY - 29, width: rect.width - 90, height: 7)
-    context.setFillColor(palette.edge)
-    context.addPath(CGPath(roundedRect: highlight, cornerWidth: 3.5, cornerHeight: 3.5, transform: nil))
-    context.fillPath()
+    let layerGradient = CGGradient(
+      colorsSpace: CGColorSpaceCreateDeviceRGB(),
+      colors: [palette.layerBottoms[index], palette.layerTops[index]] as CFArray,
+      locations: [0, 1]
+    )!
+    context.saveGState()
+    context.addPath(path)
+    context.clip()
+    context.drawLinearGradient(
+      layerGradient,
+      start: CGPoint(x: rect.midX, y: rect.minY),
+      end: CGPoint(x: rect.midX, y: rect.maxY),
+      options: []
+    )
+    context.restoreGState()
   }
-
-  let signalCenter = CGPoint(x: 790, y: 756)
-  context.setFillColor(palette.signalRing)
-  context.fillEllipse(in: CGRect(x: signalCenter.x - 58, y: signalCenter.y - 58, width: 116, height: 116))
-  context.setFillColor(palette.signal)
-  context.fillEllipse(in: CGRect(x: signalCenter.x - 39, y: signalCenter.y - 39, width: 78, height: 78))
 
   guard let image = context.makeImage() else {
     throw IconGeneratorError.imageCreationFailed
