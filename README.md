@@ -6,11 +6,8 @@
     alt="Varan app icon"
   >
   <h1>Varan</h1>
-  <p><strong>Companion for Komodo</strong></p>
-  <p>
-    Monitor and control your self-hosted Komodo instances from iPhone, iPad,
-    and Mac.
-  </p>
+  <p><strong>A native Komodo companion for iPhone, iPad, and Mac.</strong></p>
+  <p>Monitor and control your self-hosted Komodo instances.</p>
 </div>
 
 > [!IMPORTANT]
@@ -45,7 +42,9 @@ using the same connection and security model on every platform.
 - **Clear connection feedback:** distinguish invalid credentials, offline
   servers, and timeouts.
 
-## Varan on iPhone
+## Native on iPhone, iPad, and Mac
+
+### iPhone
 
 <p align="center">
   <img src="Docs/Screenshots/ios-connection.png" alt="Set up a Komodo server connection in Varan" width="30%">
