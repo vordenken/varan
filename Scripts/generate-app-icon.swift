@@ -71,7 +71,13 @@ private let tintedPalette = Palette(
   signalRing: color(44, 44, 46)
 )
 
-private func renderIcon(size: Int, palette: Palette) throws -> CGImage {
+private let macIconCornerRadius: CGFloat = 328
+
+private func renderIcon(
+  size: Int,
+  palette: Palette,
+  clipsToMacIconShape: Bool = false
+) throws -> CGImage {
   guard let context = CGContext(
     data: nil,
     width: size,
@@ -79,13 +85,26 @@ private func renderIcon(size: Int, palette: Palette) throws -> CGImage {
     bitsPerComponent: 8,
     bytesPerRow: 0,
     space: CGColorSpaceCreateDeviceRGB(),
-    bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
   ) else {
     throw IconGeneratorError.contextCreationFailed
   }
 
   let scale = CGFloat(size) / 1024
   context.scaleBy(x: scale, y: scale)
+
+  if clipsToMacIconShape {
+    let iconBounds = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+    context.addPath(
+      CGPath(
+        roundedRect: iconBounds,
+        cornerWidth: macIconCornerRadius,
+        cornerHeight: macIconCornerRadius,
+        transform: nil
+      )
+    )
+    context.clip()
+  }
 
   let gradient = CGGradient(
     colorsSpace: CGColorSpaceCreateDeviceRGB(),
@@ -171,7 +190,10 @@ private func generate() throws {
 
   for size in [16, 32, 64, 128, 256, 512, 1024] {
     let filename = "AppIcon-Mac-\(size).png"
-    try writePNG(try renderIcon(size: size, palette: defaultPalette), to: outputDirectory.appendingPathComponent(filename))
+    try writePNG(
+      try renderIcon(size: size, palette: defaultPalette, clipsToMacIconShape: true),
+      to: outputDirectory.appendingPathComponent(filename)
+    )
   }
 
   print("Generated AppIcon assets in \(outputDirectory.path)")
