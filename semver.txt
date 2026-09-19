@@ -1,0 +1,13 @@
+0.2.0
+---
+### Development Preview
+- Added dedicated server, stack, and container navigation
+- Added current and historical server metrics plus container and stack metrics
+- Added safe, typed creation and editing for supported server and stack settings
+- Added container inspection, lifecycle controls, and searchable logs
+- Improved resource loading, error handling, and VoiceOver output
+
+## 0.1.0
+- Native Komodo companion for iPhone, iPad, and Mac
+- Secure API-key and bearer-token connections backed by the system Keychain
+- Stack and service monitoring, lifecycle controls, and searchable logs

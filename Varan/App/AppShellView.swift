@@ -47,8 +47,11 @@ struct AppShellView: View {
                     }
                   } icon: {
                     Image(systemName: "server.rack")
+                      .accessibilityHidden(true)
                   }
                 }
+                .accessibilityLabel(Text(profile.name))
+                .accessibilityValue(Text(profile.baseURL))
                 .contextMenu {
                   Button("action.editConnection", systemImage: "pencil") {
                     prepareEditor(for: profile)
@@ -84,7 +87,7 @@ struct AppShellView: View {
         } detail: {
           NavigationStack {
             if let selectedProfile {
-              StackListView(profile: selectedProfile, keychainStore: keychainStore)
+              ResourceBrowserView(profile: selectedProfile, keychainStore: keychainStore)
             } else {
               ContentUnavailableView(
                 "message.selectConnection",

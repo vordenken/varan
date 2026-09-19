@@ -26,6 +26,7 @@
 		A10000000000000000000011 /* StackDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* StackDetailView.swift */; };
 		A10000000000000000000012 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* Localizable.xcstrings */; };
 		A10000000000000000000013 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* InfoPlist.strings */; };
+		A10000000000000000000014 /* ResourceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001B /* ResourceViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +65,7 @@
 		B10000000000000000000017 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		B10000000000000000000018 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B10000000000000000000019 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B1000000000000000000001B /* ResourceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,6 +151,7 @@
 			children = (
 				D1000000000000000000000E /* Connections */,
 				D1000000000000000000000F /* Stacks */,
+				D10000000000000000000010 /* Resources */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -217,6 +220,14 @@
 				B10000000000000000000015 /* StackDetailView.swift */,
 			);
 			path = Stacks;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000010 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000000000000000001B /* ResourceViews.swift */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -332,6 +343,7 @@
 				A1000000000000000000000D /* KomodoModels.swift in Sources */,
 				A1000000000000000000000E /* StackListView.swift in Sources */,
 				A10000000000000000000011 /* StackDetailView.swift in Sources */,
+				A10000000000000000000014 /* ResourceViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -417,7 +429,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -446,7 +458,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

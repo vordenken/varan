@@ -405,7 +405,7 @@ final class KomodoAPIClientTests: XCTestCase {
 
   func testConnectionMapsRejectedAPIKeyToUnauthorized() async throws {
     MockURLProtocol.handler = { request in
-      Self.response(for: request, statusCode: 403, body: "")
+      Self.response(for: request, statusCode: 401, body: "")
     }
     let client = try makeClient(authentication: .apiKey(key: "invalid", secret: "invalid"))
 
@@ -502,6 +502,34 @@ final class KomodoAPIClientTests: XCTestCase {
     }
   }
 
+  func testConnectionMapsDroppedConnectionToNetworkUnavailable() async throws {
+    MockURLProtocol.handler = { _ in
+      throw URLError(.networkConnectionLost)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    do {
+      try await client.testConnection()
+      XCTFail("Expected a network-unavailable error")
+    } catch {
+      XCTAssertEqual(error as? KomodoAPIError, .networkUnavailable)
+    }
+  }
+
+  func testConnectionAcceptsDelayedValidResponse() async throws {
+    let responseExpectation = expectation(description: "Delayed response delivered")
+    MockURLProtocol.handler = { request in
+      Thread.sleep(forTimeInterval: 0.05)
+      responseExpectation.fulfill()
+      return Self.response(for: request, statusCode: 200, body: "[]")
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    try await client.testConnection()
+
+    await fulfillment(of: [responseExpectation], timeout: 1)
+  }
+
   func testConnectionMapsTimeoutError() async throws {
     MockURLProtocol.handler = { _ in
       throw URLError(.timedOut)
@@ -532,6 +560,283 @@ final class KomodoAPIClientTests: XCTestCase {
     } catch {
       XCTAssertTrue(error is CancellationError)
     }
+  }
+
+  func testListServersAndSystemStatsUseReadContracts() async throws {
+    var requestCount = 0
+    MockURLProtocol.handler = { request in
+      requestCount += 1
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      if requestCount == 1 {
+        XCTAssertEqual(json["type"] as? String, "ListServers")
+        return Self.response(for: request, statusCode: 200, body: """
+          [{"id":"server-1","name":"Docker","template":false,"tags":["home"],
+            "info":{"state":"Ok","region":"office","address":"https://agent.local",
+              "stats":{"cpu_perc":12.5,"mem_used_gb":2.0,"mem_total_gb":8.0}}}]
+          """)
+      }
+      XCTAssertEqual(json["type"] as? String, "GetSystemStats")
+      XCTAssertEqual((json["params"] as? [String: Any])?["server"] as? String, "server-1")
+      return Self.response(for: request, statusCode: 200, body: """
+        {"cpu_perc":12.5,"load_average":{"one":0.1,"five":0.2,"fifteen":0.3},
+         "mem_used_gb":2,"mem_total_gb":8,"swap_used_gb":0,"swap_total_gb":1,
+         "disks":[],"network_ingress_bytes":100,"network_egress_bytes":200,"refresh_ts":123}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    let servers = try await client.listServers()
+    let stats = try await client.getSystemStats(server: "server-1")
+
+    XCTAssertEqual(servers.first?.info.stats?.memoryTotalGB, 8)
+    XCTAssertEqual(stats.loadAverage.five, 0.2)
+    XCTAssertEqual(stats.networkEgressBytes, 200)
+  }
+
+  func testServerDetailHistoryAndContainerListUseReadContracts() async throws {
+    var requestCount = 0
+    MockURLProtocol.handler = { request in
+      requestCount += 1
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+
+      switch requestCount {
+      case 1:
+        XCTAssertEqual(json["type"] as? String, "GetServer")
+        XCTAssertEqual(params["server"] as? String, "server-1")
+        return Self.response(for: request, statusCode: 200, body: """
+          {"_id":"server-1","name":"Docker","description":"Primary","tags":["home"],
+           "info":{"state":"Ok","version":"1.19.0"},
+           "config":{"address":"https://agent.local","region":"office","enabled":true}}
+          """)
+      case 2:
+        XCTAssertEqual(json["type"] as? String, "GetHistoricalServerStats")
+        XCTAssertEqual(params["server"] as? String, "server-1")
+        XCTAssertEqual(params["granularity"] as? String, "1-hour")
+        XCTAssertEqual(params["page"] as? Int, 2)
+        return Self.response(for: request, statusCode: 200, body: """
+          {"stats":[{"ts":123,"cpu_perc":20,"mem_used_gb":2,"mem_total_gb":8}],
+           "next_page":3}
+          """)
+      default:
+        XCTAssertEqual(json["type"] as? String, "ListContainers")
+        XCTAssertEqual(params["server"] as? String, "server-1")
+        return Self.response(for: request, statusCode: 200, body: """
+          [{"server_id":"server-1","server_name":"Docker","name":"web","id":"container-1",
+            "state":"running","networks":[]}]
+          """)
+      }
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    let server = try await client.getServer(idOrName: "server-1")
+    let history = try await client.getHistoricalServerStats(
+      server: "server-1",
+      granularity: "1-hour",
+      page: 2
+    )
+    let containers = try await client.listContainers(server: "server-1")
+
+    XCTAssertEqual(server.info.version, "1.19.0")
+    XCTAssertEqual(history.stats.first?.cpuPercent, 20)
+    XCTAssertEqual(history.nextPage, 3)
+    XCTAssertEqual(containers.first?.name, "web")
+  }
+
+  func testCreateServerSendsTypedConfigurationToWriteEndpoint() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      XCTAssertEqual(json["type"] as? String, "CreateServer")
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["name"] as? String, "Docker")
+      XCTAssertNil(params["public_key"])
+      let config = try XCTUnwrap(params["config"] as? [String: Any])
+      XCTAssertEqual(config["address"] as? String, "https://agent.local")
+      XCTAssertEqual(config["stats_monitoring"] as? Bool, true)
+      XCTAssertNil(config["region"])
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"server-1","name":"Docker","description":"","tags":[],
+         "info":{"state":"Ok"},
+         "config":{"address":"https://agent.local","stats_monitoring":true}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let patch = ServerConfigPatch(
+      address: "https://agent.local",
+      statsMonitoring: true
+    )
+
+    let server = try await client.createServer(name: "Docker", config: patch)
+
+    XCTAssertEqual(server.id, "server-1")
+    XCTAssertTrue(server.config.statsMonitoring)
+  }
+
+  func testCreateStackSendsTypedConfigurationToWriteEndpoint() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      XCTAssertEqual(json["type"] as? String, "CreateStack")
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["name"] as? String, "Home")
+      let config = try XCTUnwrap(params["config"] as? [String: Any])
+      XCTAssertEqual(config["server_id"] as? String, "server-1")
+      XCTAssertEqual(config["project_name"] as? String, "home")
+      XCTAssertNil(config["branch"])
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"stack-1","name":"Home","description":"","template":false,"tags":[],
+         "info":{},"config":{"server_id":"server-1","project_name":"home"}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let patch = StackConfigPatch(serverID: "server-1", projectName: "home")
+
+    let stack = try await client.createStack(name: "Home", config: patch)
+
+    XCTAssertEqual(stack.id, "stack-1")
+    XCTAssertEqual(stack.config.projectName, "home")
+  }
+
+  func testUpdateServerSendsOnlyProvidedPartialFieldsToWriteEndpoint() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.absoluteString, "https://komodo.example.com/write")
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "UpdateServer")
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["id"] as? String, "server-1")
+      let config = try XCTUnwrap(params["config"] as? [String: Any])
+      XCTAssertEqual(config["region"] as? String, "office")
+      XCTAssertNil(config["address"])
+      XCTAssertNil(config["enabled"])
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"server-1","name":"Docker","description":"","tags":[],
+         "info":{"state":"Ok"},"config":{"address":"https://agent.local","region":"office"}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let patch = ServerConfigPatch(region: "office")
+
+    let server = try await client.updateServer(id: "server-1", config: patch)
+
+    XCTAssertEqual(server.config.region, "office")
+  }
+
+  func testUpdateStackSendsTypedPartialConfiguration() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "UpdateStack")
+      let config = try XCTUnwrap((json["params"] as? [String: Any])?["config"] as? [String: Any])
+      XCTAssertEqual(config["branch"] as? String, "stable")
+      XCTAssertEqual(config["auto_pull"] as? Bool, true)
+      XCTAssertNil(config["repo"])
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"stack-1","name":"Home","description":"","template":false,"tags":[],
+         "info":{},"config":{"server_id":"server-1","branch":"stable","auto_pull":true}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let patch = StackConfigPatch(branch: "stable", autoPull: true)
+
+    let stack = try await client.updateStack(id: "stack-1", config: patch)
+
+    XCTAssertEqual(stack.config.branch, "stable")
+    XCTAssertTrue(stack.config.autoPull)
+  }
+
+  func testForbiddenIsNotReportedAsInvalidAuthentication() async throws {
+    MockURLProtocol.handler = { request in
+      Self.response(for: request, statusCode: 403, body: #"{"error":"forbidden"}"#)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    do {
+      _ = try await client.listServers()
+      XCTFail("Expected forbidden")
+    } catch {
+      XCTAssertEqual(error as? KomodoAPIError, .forbidden)
+    }
+  }
+
+  func testInspectStackContainerUsesStackAndService() async throws {
+    MockURLProtocol.handler = { request in
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "InspectStackContainer")
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["stack"] as? String, "stack-1")
+      XCTAssertEqual(params["service"] as? String, "web")
+      return Self.response(for: request, statusCode: 200, body: """
+        {"Id":"container-1","Name":"/home-web","Config":{"Image":"example/web:latest"},
+         "State":{"Status":"running","Running":true,"Paused":false,"Restarting":false,"ExitCode":0,"Error":""},
+         "Mounts":[{"Type":"bind","Source":"/srv/data","Destination":"/data","RW":true}]}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    let inspection = try await client.inspectStackContainer(stack: "stack-1", service: "web")
+
+    XCTAssertEqual(inspection.image, "example/web:latest")
+    XCTAssertEqual(inspection.mounts.first?.destination, "/data")
+    XCTAssertTrue(inspection.state?.running == true)
+  }
+
+  func testListAllContainersDecodesDockerFormattedStats() async throws {
+    MockURLProtocol.handler = { request in
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "ListAllContainers")
+      return Self.response(for: request, statusCode: 200, body: """
+        [{"server_id":"server-1","server_name":"Docker","name":"web","id":"container-1",
+          "image":"example/web:latest","state":"running","status":"Up 2 hours",
+          "networks":["frontend"],"ports":[{"IP":"0.0.0.0","PrivatePort":80,"PublicPort":8080,"Type":"tcp"}],
+          "volumes":["web-data"],"stats":{"Name":"web","CPUPerc":"1.25%","MemPerc":"3.50%",
+            "MemUsage":"128MiB / 4GiB","NetIO":"1MB / 2MB","BlockIO":"3MB / 4MB","PIDs":"12"}}]
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    let containers = try await client.listAllContainers()
+    let container = try XCTUnwrap(containers.first)
+
+    XCTAssertEqual(container.stats?.cpuPercent, 1.25)
+    XCTAssertEqual(container.stats?.cpuCoreEquivalent, 0.0125)
+    XCTAssertEqual(container.stats?.memoryPercent, 3.5)
+    XCTAssertEqual(container.stats?.parsedMemoryUsage?.usedBytes, 134_217_728)
+    XCTAssertEqual(container.stats?.parsedMemoryUsage?.limitBytes, 4_294_967_296)
+    XCTAssertEqual(container.stats?.processCount, 12)
+    XCTAssertEqual(container.ports.first?.publicPort, 8080)
+  }
+
+  func testContainerMemoryAggregationUsesCombinedUsageAndLimits() throws {
+    let stats = try JSONDecoder().decode([ContainerStats].self, from: Data("""
+      [
+        {"Name":"web","MemUsage":"128MiB / 512MiB"},
+        {"Name":"database","MemUsage":"256MiB / 1GiB"}
+      ]
+      """.utf8))
+
+    let aggregate = try XCTUnwrap(ContainerMemoryUsage.aggregate(stats))
+
+    XCTAssertEqual(aggregate.usedBytes, 402_653_184)
+    XCTAssertEqual(aggregate.limitBytes, 1_610_612_736)
+    XCTAssertEqual(try XCTUnwrap(aggregate.percentage), 25, accuracy: 0.001)
+  }
+
+  func testContainerMemoryAggregationRejectsPartialData() throws {
+    let stats = try JSONDecoder().decode([ContainerStats].self, from: Data("""
+      [
+        {"Name":"web","MemUsage":"128MiB / 512MiB"},
+        {"Name":"database","MemUsage":"not available"}
+      ]
+      """.utf8))
+
+    XCTAssertNil(ContainerMemoryUsage.aggregate(stats))
   }
 
   private func makeClient(authentication: KomodoAuthentication) throws -> KomodoAPIClient {

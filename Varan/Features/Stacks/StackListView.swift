@@ -15,6 +15,7 @@ struct StackListView: View {
   @State private var searchText = ""
   @State private var nextPage = 0
   @State private var canLoadMore = true
+  @State private var showingCreate = false
 
   private let pageSize = 50
 
@@ -37,6 +38,7 @@ struct StackListView: View {
         stackList
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .navigationTitle("title.stacks")
     .searchable(text: $searchText, prompt: "title.stacks")
     .toolbar {
@@ -45,6 +47,19 @@ struct StackListView: View {
           Task { await loadStacks(reset: true) }
         }
         .disabled(loadState == .loading)
+      }
+      ToolbarItem {
+        Button("action.addStack", systemImage: "plus") {
+          showingCreate = true
+        }
+      }
+    }
+    .sheet(isPresented: $showingCreate) {
+      NavigationStack {
+        StackEditorView(profile: profile, keychainStore: keychainStore) {
+          showingCreate = false
+          Task { await loadStacks(reset: true) }
+        }
       }
     }
     .task(id: profile.id) {
@@ -146,6 +161,7 @@ private struct StackRow: View {
       Image(systemName: stateSymbol)
         .foregroundStyle(stateColor)
         .frame(width: 24)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 3) {
         Text(stack.name)
@@ -162,7 +178,9 @@ private struct StackRow: View {
         .font(.caption)
         .foregroundStyle(.secondary)
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(stack.name))
+    .accessibilityValue(Text("\(detail), \(localizedState)"))
   }
 
   private var detail: String {
