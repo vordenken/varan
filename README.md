@@ -22,34 +22,34 @@ brand assets, or source code.
 ## What Varan does
 
 Varan keeps your Komodo environments within reach across Apple platforms. Add
-one or more server profiles, browse and search stacks, inspect services and
-container states, stream logs, and start or stop workloads after confirmation.
+one or more connections, browse servers, stacks, and containers, inspect
+metrics and logs, and manage supported settings without leaving the app.
 
 The shared SwiftUI app adapts its navigation to iPhone, iPad, and Mac while
 using the same connection and security model on every platform.
 
 ## Highlights
 
-- **Multiple environments:** save server profiles and switch between them with
-  adaptive navigation.
-- **Stack overview:** search, refresh, and browse paginated stack listings.
-- **Service controls:** inspect stack, service, and container states and perform
-  confirmed start and stop actions.
-- **Live logs:** search and select log output with automatic refresh.
+- **Resource browser:** move between dedicated server, stack, and container
+  views with adaptive navigation.
+- **Metrics:** inspect current resource usage and historical server data.
+- **Safe changes:** create and edit supported server and stack settings through
+  typed, partial updates.
+- **Controls and logs:** start or stop workloads after confirmation and search
+  automatically refreshed logs.
+- **Multiple environments:** save connections and switch between them.
 - **Flexible authentication:** connect with a Komodo API key or JWT.
 - **Native security:** keep credentials in the system Keychain and non-secret
   profile metadata in SwiftData.
-- **Clear connection feedback:** distinguish invalid credentials, offline
-  servers, and timeouts.
 
 ## Native on iPhone, iPad, and Mac
 
 ### iPhone
 
 <p align="center">
-  <img src="Docs/Screenshots/ios-connection.png" alt="Set up a Komodo server connection in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-stacks.png" alt="Browse and search Komodo stacks in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Inspect services and container states for a Komodo stack" width="30%">
+  <img src="Docs/Screenshots/ios-server-detail.png" alt="Inspect server metrics and related resources in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Inspect services and aggregate stack metrics in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-container-detail.png" alt="Inspect container resource usage and configuration in Varan" width="30%">
 </p>
 
 ## Connections and security
@@ -135,11 +135,10 @@ languages.
 
 ## Project status
 
-The core workflow for connecting to Komodo, browsing stacks, controlling
-services, and reading logs is implemented and under active development. The
-repository is currently intended for development and evaluation rather than
-production installation. Interfaces and requirements may change before the
-first public release.
+The core workflow for connecting to Komodo, browsing resources, viewing
+metrics and logs, controlling workloads, and editing supported settings is
+implemented. The repository remains a development preview intended for
+evaluation; interfaces may change before the first public release.
 
 ## Contributing
 
@@ -149,7 +148,8 @@ can be agreed first.
 
 Keep contributions compatible with iOS, iPadOS, and macOS, add user-facing
 strings in English and German, and run the relevant local XCTest target before
-submitting code changes.
+submitting code changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+feature-branch and versioning workflow.
 
 ## Support
 

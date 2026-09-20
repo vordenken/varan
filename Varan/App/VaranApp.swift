@@ -69,6 +69,7 @@ private struct StartupView: View {
         Image(systemName: "server.rack")
           .font(.system(size: 52, weight: .medium))
           .foregroundStyle(.tint)
+          .accessibilityHidden(true)
         Text("Varan")
           .font(.title2.bold())
         ProgressView()

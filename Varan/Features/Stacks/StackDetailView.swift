@@ -29,6 +29,7 @@ struct StackDetailView: View {
   @State private var activeActionID: String?
   @State private var stopTarget: StopTarget?
   @State private var actionError: String?
+  @State private var showingEditor = false
 
   var body: some View {
     Group {
@@ -52,6 +53,10 @@ struct StackDetailView: View {
     .navigationTitle(detail?.name ?? summary.name)
     .toolbar {
       ToolbarItemGroup {
+        Button("action.edit", systemImage: "pencil") {
+          showingEditor = true
+        }
+        .disabled(detail == nil || isBusy)
         Button("action.refresh", systemImage: "arrow.clockwise") {
           Task { await loadContent() }
         }
@@ -100,6 +105,20 @@ struct StackDetailView: View {
     } message: {
       Text(actionError ?? String(localized: "error.unknown"))
     }
+    .sheet(isPresented: $showingEditor) {
+      if let detail {
+        NavigationStack {
+          StackEditorView(
+            profile: profile,
+            keychainStore: keychainStore,
+            stack: detail
+          ) {
+            showingEditor = false
+            Task { await loadContent() }
+          }
+        }
+      }
+    }
   }
 
   private var content: some View {
@@ -124,12 +143,21 @@ struct StackDetailView: View {
         } else {
           ForEach(services) { service in
             NavigationLink {
-              StackLogView(
-                profile: profile,
-                keychainStore: keychainStore,
-                stackID: summary.id,
-                service: service
-              )
+              if let container = service.container {
+                ContainerDetailView(
+                  container: container,
+                  profile: profile,
+                  keychainStore: keychainStore,
+                  ownerStack: detail
+                )
+              } else {
+                StackLogView(
+                  profile: profile,
+                  keychainStore: keychainStore,
+                  stackID: summary.id,
+                  service: service
+                )
+              }
             } label: {
               StackServiceRow(
                 service: service,
@@ -166,6 +194,39 @@ struct StackDetailView: View {
         if case .failed(let message) = loadState {
           Label(message, systemImage: "exclamationmark.triangle")
             .foregroundStyle(.red)
+        }
+      }
+
+      let containerStats = services.compactMap(\.container?.stats)
+      if !containerStats.isEmpty {
+        Section("section.currentMetrics") {
+          let cpuPercent = containerStats.reduce(0) { $0 + $1.cpuPercent }
+          LabeledContent("field.cpu") {
+            Text(String(
+              format: String(localized: "metrics.cpuWithCores"),
+              cpuPercent,
+              cpuPercent / 100
+            ))
+          }
+          if let memory = ContainerMemoryUsage.aggregate(containerStats) {
+            LabeledContent("field.memory", value: memory.formatted)
+            if let percentage = memory.percentage {
+              LabeledContent(
+                "field.memoryPercent",
+                value: String(format: "%.1f %%", percentage)
+              )
+            }
+          } else {
+            ForEach(Array(containerStats.enumerated()), id: \.offset) { _, stats in
+              LabeledContent(
+                stats.name.isEmpty ? String(localized: "field.memory") : stats.name,
+                value: stats.memoryUsage
+              )
+            }
+          }
+          Text("message.stackMetricsAggregate")
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
     }
@@ -343,6 +404,7 @@ private struct StackServiceRow: View {
         Image(systemName: stateSymbol)
           .foregroundStyle(stateColor)
           .frame(width: 22)
+          .accessibilityHidden(true)
       }
 
       VStack(alignment: .leading, spacing: 3) {
@@ -371,7 +433,20 @@ private struct StackServiceRow: View {
         .font(.caption)
         .foregroundStyle(.secondary)
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(service.service))
+    .accessibilityValue(Text(accessibilityValue))
+  }
+
+  private var accessibilityValue: String {
+    var components = [service.container?.image ?? service.image, localizedState]
+    if let name = service.container?.name, !name.isEmpty {
+      components.insert(name, at: 1)
+    }
+    if updateAvailable {
+      components.append(String(localized: "status.updateAvailable"))
+    }
+    return components.filter { !$0.isEmpty }.joined(separator: ", ")
   }
 
   private var normalizedState: String {
@@ -624,6 +699,7 @@ private struct StackLogView: View {
     HStack(spacing: 8) {
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
+        .accessibilityHidden(true)
       TextField("log.search", text: $searchText)
         .textFieldStyle(.plain)
         #if os(iOS)

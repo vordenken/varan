@@ -9,6 +9,7 @@ enum KomodoAPIError: LocalizedError, Equatable {
   case invalidResponse
   case unauthorized
   case invalidToken
+  case forbidden
   case server(statusCode: Int, reason: String?)
   case invalidPayload
   case networkUnavailable
@@ -23,6 +24,8 @@ enum KomodoAPIError: LocalizedError, Equatable {
       String(localized: "error.api.unauthorized")
     case .invalidToken:
       String(localized: "error.api.invalidToken")
+    case .forbidden:
+      String(localized: "error.api.forbidden")
     case .server(let statusCode, let reason):
       if let reason {
         String(format: String(localized: "error.api.server.withReason"), statusCode, reason)
@@ -58,6 +61,7 @@ actor KomodoAPIClient {
   }
 
   private struct StackQuery: Encodable {}
+  private struct ServerQuery: Encodable {}
 
   private struct ListStacksParameters: Encodable {
     let query: StackQuery
@@ -104,6 +108,10 @@ actor KomodoAPIClient {
     let tail: Int
     let timestamps: Bool
   }
+  private struct InspectStackContainerParameters: Encodable {
+    let stack: String
+    let service: String
+  }
 
   private struct ContainerLogParameters: Encodable {
     let server: String
@@ -111,6 +119,37 @@ actor KomodoAPIClient {
     let tail: Int
     let timestamps: Bool
   }
+
+  private struct ListServersParameters: Encodable {
+    let query: ServerQuery
+    let page: Int
+    let limit: Int
+  }
+
+  private struct ServerParameters: Encodable { let server: String }
+  private struct HistoricalStatsParameters: Encodable {
+    let server: String
+    let granularity: String
+    let page: Int
+  }
+  private struct ListAllContainersParameters: Encodable {
+    let servers: [String] = []
+    let tags: [String] = []
+    let terms: [String] = []
+    let state: [String] = []
+    let page: Int
+    let limit: Int
+  }
+  private struct ListContainersParameters: Encodable { let server: String }
+  private struct CreateServerParameters: Encodable {
+    let name: String
+    let config: ServerConfigPatch
+    let publicKey: String? = nil
+    enum CodingKeys: String, CodingKey { case name, config; case publicKey = "public_key" }
+  }
+  private struct UpdateServerParameters: Encodable { let id: String; let config: ServerConfigPatch }
+  private struct CreateStackParameters: Encodable { let name: String; let config: StackConfigPatch }
+  private struct UpdateStackParameters: Encodable { let id: String; let config: StackConfigPatch }
 
   private let address: ServerAddress
   private let authentication: KomodoAuthentication
@@ -141,8 +180,71 @@ actor KomodoAPIClient {
     try await read(type: "GetStack", parameters: StackParameters(stack: idOrName))
   }
 
+  func listServers(page: Int = 0, limit: Int = 50) async throws -> [ServerListItem] {
+    try await read(
+      type: "ListServers",
+      parameters: ListServersParameters(query: ServerQuery(), page: page, limit: limit)
+    )
+  }
+
+  func getServer(idOrName: String) async throws -> ServerDetail {
+    try await read(type: "GetServer", parameters: ServerParameters(server: idOrName))
+  }
+
+  func getSystemStats(server: String) async throws -> SystemStats {
+    try await read(type: "GetSystemStats", parameters: ServerParameters(server: server))
+  }
+
+  func getHistoricalServerStats(
+    server: String,
+    granularity: String = "15-min",
+    page: Int = 0
+  ) async throws -> HistoricalSystemStatsPage {
+    try await read(
+      type: "GetHistoricalServerStats",
+      parameters: HistoricalStatsParameters(server: server, granularity: granularity, page: page)
+    )
+  }
+
+  func listAllContainers(page: Int = 0, limit: Int = 100) async throws -> [ContainerListItem] {
+    try await read(
+      type: "ListAllContainers",
+      parameters: ListAllContainersParameters(page: page, limit: limit)
+    )
+  }
+
+  func listContainers(server: String) async throws -> [ContainerListItem] {
+    try await read(type: "ListContainers", parameters: ListContainersParameters(server: server))
+  }
+
+  func createServer(name: String, config: ServerConfigPatch) async throws -> ServerDetail {
+    try await write(
+      type: "CreateServer",
+      parameters: CreateServerParameters(name: name, config: config)
+    )
+  }
+
+  func updateServer(id: String, config: ServerConfigPatch) async throws -> ServerDetail {
+    try await write(type: "UpdateServer", parameters: UpdateServerParameters(id: id, config: config))
+  }
+
+  func createStack(name: String, config: StackConfigPatch) async throws -> StackDetail {
+    try await write(type: "CreateStack", parameters: CreateStackParameters(name: name, config: config))
+  }
+
+  func updateStack(id: String, config: StackConfigPatch) async throws -> StackDetail {
+    try await write(type: "UpdateStack", parameters: UpdateStackParameters(id: id, config: config))
+  }
+
   func listStackServices(stack idOrName: String) async throws -> [StackService] {
     try await read(type: "ListStackServices", parameters: StackParameters(stack: idOrName))
+  }
+
+  func inspectStackContainer(stack: String, service: String) async throws -> ContainerInspection {
+    try await read(
+      type: "InspectStackContainer",
+      parameters: InspectStackContainerParameters(stack: stack, service: service)
+    )
   }
 
   func startStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
@@ -226,6 +328,13 @@ actor KomodoAPIClient {
     try await request(endpoint: .execute, type: type, parameters: parameters)
   }
 
+  private func write<Response: Decodable, Parameters: Encodable>(
+    type: String,
+    parameters: Parameters
+  ) async throws -> Response {
+    try await request(endpoint: .write, type: type, parameters: parameters)
+  }
+
   private func request<Response: Decodable, Parameters: Encodable>(
     endpoint: Endpoint,
     type: String,
@@ -263,13 +372,15 @@ actor KomodoAPIClient {
       } catch {
         throw KomodoAPIError.invalidPayload
       }
-    case 401, 403:
+    case 401:
       switch authentication {
       case .bearerToken:
         throw KomodoAPIError.invalidToken
       case .apiKey:
         throw KomodoAPIError.unauthorized
       }
+    case 403:
+      throw KomodoAPIError.forbidden
     default:
       throw KomodoAPIError.server(
         statusCode: httpResponse.statusCode,
