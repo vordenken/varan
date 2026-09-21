@@ -50,12 +50,42 @@ Feature: Browse and manage Komodo resources
     Then the add action appears before the refresh action
     And a container list only offers refresh because containers belong to stacks
 
+  Scenario: Show compact live connection state
+    Given live updates are configured for the selected connection
+    When I browse a resource list or detail view
+    Then a green, amber, or red status indicator appears beside refresh
+    And selecting it explains the current connection state
+    And the live connection does not occupy the bottom action area
+
+  Scenario: Display consistent resource rows
+    Given servers, stacks, and containers have been loaded
+    When I switch between their primary navigation tabs
+    Then status icons, text, and row spacing use the same alignment
+    And resource states are localized consistently
+    And a server without secondary information keeps its name vertically centered
+
   Scenario: Inspect a stack container
     Given a stack contains a running container
     When I open the container detail view
     Then I see its status, image, ports, volumes, and networks
     And I can open its metrics and logs
     And runtime actions are separate from configuration editing
+
+  Scenario: Operate a container from its detail view
+    Given I have opened a container detail view
+    When its runtime state is loaded
+    Then a toolbar menu offers only actions valid for that state
+    And every action shows a clear symbol and text label
+    And removal actions are separated from operational actions
+    And destructive actions require confirmation
+    And an accepted action reloads canonical server state
+
+  Scenario: Delete a managed resource definition
+    Given I have permission to delete a server or stack definition
+    When I choose its delete action
+    Then Varan explains the difference between deleting the definition and destroying runtime containers
+    And deletion requires confirmation
+    And the resource lists refresh after deletion succeeds
 
   Scenario: Update supported stack configuration
     Given I can write to a stack

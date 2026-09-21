@@ -265,6 +265,44 @@ final class KomodoAPIClientTests: XCTestCase {
     XCTAssertEqual(update.status, "InProgress")
   }
 
+  func testStackLifecycleActionsUseExecuteContracts() async throws {
+    var receivedTypes: [String] = []
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/execute")
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      let type = try XCTUnwrap(json["type"] as? String)
+      receivedTypes.append(type)
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["stack"] as? String, "stack-1")
+      XCTAssertEqual(params["services"] as? [String], [])
+      if type == "DeployStack" {
+        XCTAssertNil(params["stop_time"])
+      }
+      if type == "DestroyStack" {
+        XCTAssertEqual(params["remove_orphans"] as? Bool, true)
+        XCTAssertNil(params["stop_time"])
+      }
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"update-1","success":true,"status":"Complete"}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    _ = try await client.deployStack(idOrName: "stack-1")
+    _ = try await client.pullStackImages(idOrName: "stack-1")
+    _ = try await client.restartStack(idOrName: "stack-1")
+    _ = try await client.pauseStack(idOrName: "stack-1")
+    _ = try await client.unpauseStack(idOrName: "stack-1")
+    _ = try await client.destroyStack(idOrName: "stack-1", removeOrphans: true)
+
+    XCTAssertEqual(
+      receivedTypes,
+      ["DeployStack", "PullStack", "RestartStack", "PauseStack", "UnpauseStack", "DestroyStack"]
+    )
+  }
+
   func testContainerActionsUseExecuteContracts() async throws {
     var receivedTypes: [String] = []
     MockURLProtocol.handler = { request in
@@ -290,9 +328,47 @@ final class KomodoAPIClientTests: XCTestCase {
     let client = try makeClient(authentication: .bearerToken("signed-token"))
 
     _ = try await client.startContainer(server: "server-1", container: "home-web-1")
+    _ = try await client.restartContainer(server: "server-1", container: "home-web-1")
+    _ = try await client.pauseContainer(server: "server-1", container: "home-web-1")
+    _ = try await client.unpauseContainer(server: "server-1", container: "home-web-1")
     _ = try await client.stopContainer(server: "server-1", container: "home-web-1")
+    _ = try await client.destroyContainer(server: "server-1", container: "home-web-1")
 
-    XCTAssertEqual(receivedTypes, ["StartContainer", "StopContainer"])
+    XCTAssertEqual(
+      receivedTypes,
+      [
+        "StartContainer", "RestartContainer", "PauseContainer", "UnpauseContainer",
+        "StopContainer", "DestroyContainer"
+      ]
+    )
+  }
+
+  func testResourceDeletionUsesWriteContracts() async throws {
+    var receivedTypes: [String] = []
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      let type = try XCTUnwrap(json["type"] as? String)
+      receivedTypes.append(type)
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["id"] as? String, type == "DeleteStack" ? "stack-1" : "server-1")
+      if type == "DeleteStack" {
+        return Self.response(for: request, statusCode: 200, body: """
+          {"_id":"stack-1","name":"Home","info":{},"config":{}}
+          """)
+      }
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"server-1","name":"Docker","info":{},"config":{}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    _ = try await client.deleteStack(idOrName: "stack-1")
+    _ = try await client.deleteServer(idOrName: "server-1")
+
+    XCTAssertEqual(receivedTypes, ["DeleteStack", "DeleteServer"])
   }
 
   func testGetContainerLogUsesReadEndpointAndDecodesOutput() async throws {
@@ -352,6 +428,16 @@ final class KomodoAPIClientTests: XCTestCase {
 
     XCTAssertEqual(log.cleanedStandardOutput, "ready")
     XCTAssertEqual(log.combinedOutput, "ready")
+  }
+
+  func testEmptyLogKeepsCombinedOutputEmptyForEmptyStatePresentation() throws {
+    let data = Data(
+      #"{"stage":"log","command":"docker logs","stdout":"","stderr":"","success":true,"start_ts":1,"end_ts":2}"#.utf8
+    )
+
+    let log = try JSONDecoder().decode(KomodoLog.self, from: data)
+
+    XCTAssertTrue(log.combinedOutput.isEmpty)
   }
 
   func testLogSearchCountsRepeatedMatchesAndFiltersLines() {

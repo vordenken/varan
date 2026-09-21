@@ -21,6 +21,16 @@
         }
       }
     },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
     "%@ %lld" : {
       "localizations" : {
         "en" : {
@@ -153,6 +163,70 @@
         }
       }
     },
+    "action.deleteServer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Server"
+          }
+        }
+      }
+    },
+    "action.deleteStack" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stack löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Stack"
+          }
+        }
+      }
+    },
+    "action.deploy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereitstellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deploy"
+          }
+        }
+      }
+    },
+    "action.destroy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stack-Container entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destroy Stack Containers"
+          }
+        }
+      }
+    },
     "action.done" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -234,6 +308,22 @@
         }
       }
     },
+    "action.more" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        }
+      }
+    },
     "action.ok" : {
       "localizations" : {
         "de" : {
@@ -246,6 +336,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        }
+      }
+    },
+    "action.openContainerLogs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container-Logs öffnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Container Logs"
+          }
+        }
+      }
+    },
+    "action.openLogs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logs öffnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Logs"
+          }
+        }
+      }
+    },
+    "action.openStackLogs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stack-Logs öffnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Stack Logs"
+          }
+        }
+      }
+    },
+    "action.pause" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "action.pullImages" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images laden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pull Images"
+          }
+        }
+      }
+    },
+    "action.reconnect" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu verbinden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect"
           }
         }
       }
@@ -278,6 +464,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh Now"
+          }
+        }
+      }
+    },
+    "action.removeContainer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destroy Container"
+          }
+        }
+      }
+    },
+    "action.restart" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu starten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart"
+          }
+        }
+      }
+    },
+    "action.resume" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
           }
         }
       }
@@ -379,6 +613,7 @@
       }
     },
     "action.startStack" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -411,6 +646,7 @@
       }
     },
     "action.stopStack" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -454,6 +690,176 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Test & Update"
+          }
+        }
+      }
+    },
+    "actionDescription.deleteStack" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löscht nur die Stackdefinition dauerhaft aus Komodo."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permanently deletes only the stack definition from Komodo."
+          }
+        }
+      }
+    },
+    "actionDescription.deploy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startet oder aktualisiert den Stack mit seiner aktuellen Konfiguration."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts or updates the stack using its current configuration."
+          }
+        }
+      }
+    },
+    "actionDescription.destroyContainer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stoppt und entfernt diesen Container dauerhaft."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stops and permanently removes this container."
+          }
+        }
+      }
+    },
+    "actionDescription.destroyStack" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stoppt und entfernt die Container dieses Stacks. Die Stackdefinition bleibt erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stops and removes this stack's containers. The stack definition remains available."
+          }
+        }
+      }
+    },
+    "actionDescription.pause" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hält laufende Prozesse vorübergehend an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporarily suspends running processes."
+          }
+        }
+      }
+    },
+    "actionDescription.pullImages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lädt die aktuellen Images, ohne den Stack neu zu erstellen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads the current images without recreating the stack."
+          }
+        }
+      }
+    },
+    "actionDescription.restart" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startet die laufende Ressource neu."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restarts the running resource."
+          }
+        }
+      }
+    },
+    "actionDescription.resume" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setzt die pausierte Ressource fort."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resumes the paused resource."
+          }
+        }
+      }
+    },
+    "actionDescription.start" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startet die gestoppte Ressource."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts the stopped resource."
+          }
+        }
+      }
+    },
+    "actionDescription.stop" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stoppt die Ressource, ohne ihre Konfiguration zu löschen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stops the resource without deleting its configuration."
           }
         }
       }
@@ -576,6 +982,118 @@
         }
       }
     },
+    "confirm.containerAction.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Aktion wird für den Container %@ ausgeführt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action will be performed on container %@."
+          }
+        }
+      }
+    },
+    "confirm.deleteServer.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Server enthält noch %1$ld Stacks und %2$ld Container. Die Serverdefinition wird dauerhaft aus Komodo gelöscht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server still contains %1$ld stacks and %2$ld containers. Its server definition will be permanently deleted from Komodo."
+          }
+        }
+      }
+    },
+    "confirm.deleteServer.title" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverdefinition löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete server definition?"
+          }
+        }
+      }
+    },
+    "confirm.deleteStack.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Stackdefinition %@ wird dauerhaft aus Komodo gelöscht. Laufende Container werden dadurch nicht automatisch entfernt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The stack definition %@ will be permanently deleted from Komodo. Running containers are not automatically destroyed."
+          }
+        }
+      }
+    },
+    "confirm.destroyStack.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container des Stacks %@ werden gestoppt und entfernt. Die Stackdefinition bleibt erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All containers in stack %@ will be stopped and destroyed. The stack definition is kept."
+          }
+        }
+      }
+    },
+    "confirm.removeContainer.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Container %@ wird dauerhaft entfernt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container %@ will be permanently destroyed."
+          }
+        }
+      }
+    },
+    "confirm.removeOwnedContainer.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ gehört zu einem Stack. Der Container wird entfernt, die Konfiguration bleibt jedoch Teil des Stacks und kann beim nächsten Deployment erneut erstellt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ belongs to a stack. The container will be destroyed, but its configuration remains part of that stack and may be recreated by the next deployment."
+          }
+        }
+      }
+    },
     "confirm.saveChanges.fields" : {
       "localizations" : {
         "de" : {
@@ -625,6 +1143,22 @@
         }
       }
     },
+    "confirm.stackAction.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Aktion wird für den Stack %@ ausgeführt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action will be performed on stack %@."
+          }
+        }
+      }
+    },
     "confirm.stopAllServices" : {
       "localizations" : {
         "de" : {
@@ -637,6 +1171,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All running services in this stack will be stopped."
+          }
+        }
+      }
+    },
+    "confirm.stopContainer.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Container %@ wird gestoppt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container %@ will be stopped."
           }
         }
       }
@@ -867,6 +1417,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connection failed."
+          }
+        }
+      }
+    },
+    "error.container.serverMissing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server dieses Containers konnte nicht ermittelt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server for this container could not be determined."
           }
         }
       }
@@ -1745,6 +2311,22 @@
         }
       }
     },
+    "log.allServices" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Dienste"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Services"
+          }
+        }
+      }
+    },
     "log.autoRefresh" : {
       "localizations" : {
         "de" : {
@@ -1857,6 +2439,22 @@
         }
       }
     },
+    "log.selectedServices" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ld Dienste ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ld services selected"
+          }
+        }
+      }
+    },
     "log.settings" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1890,6 +2488,22 @@
         }
       }
     },
+    "log.tail" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Zeilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Lines"
+          }
+        }
+      }
+    },
     "log.title" : {
       "localizations" : {
         "de" : {
@@ -1918,6 +2532,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No historical data is available for this period."
+          }
+        }
+      }
+    },
+    "message.logsUnavailable" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für diese Ressource sind keine Logs verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logs are not available for this resource."
           }
         }
       }
@@ -2553,6 +3183,22 @@
         }
       }
     },
+    "section.destructiveActions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destructive Actions"
+          }
+        }
+      }
+    },
     "section.history" : {
       "localizations" : {
         "de" : {
@@ -2586,6 +3232,7 @@
       }
     },
     "section.logs" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2613,6 +3260,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Networks"
+          }
+        }
+      }
+    },
+    "section.observability" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beobachtung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Observability"
+          }
+        }
+      }
+    },
+    "section.operationActions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Betrieb"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operation"
           }
         }
       }
@@ -3225,6 +3904,22 @@
         }
       }
     },
+    "state.removing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird entfernt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removing"
+          }
+        }
+      }
+    },
     "state.restarting" : {
       "localizations" : {
         "de" : {
@@ -3349,6 +4044,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Live connection active"
+          }
+        }
+      }
+    },
+    "status.liveUpdatesDisabled" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live-Aktualisierungen sind für diese Verbindung deaktiviert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live updates are disabled for this connection."
           }
         }
       }
@@ -3498,6 +4209,7 @@
       }
     },
     "status.stackRunning" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -3531,6 +4243,22 @@
     },
     "Time" : {
 
+    },
+    "title.containerActions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container-Aktionen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container actions"
+          }
+        }
+      }
     },
     "title.containers" : {
       "localizations" : {
@@ -3624,6 +4352,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Logs unavailable"
+          }
+        }
+      }
+    },
+    "title.moreActions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Aktionen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More Actions"
           }
         }
       }

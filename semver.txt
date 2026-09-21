@@ -1,6 +1,13 @@
-0.3.0
+0.4.0
 ---
 ### Development Preview
+- Added state-aware stack and container toolbar menus with labeled, grouped actions that keep detail content unobscured
+- Restored a dedicated unified log viewer for stack, service, and container logs with responsive background search
+- Moved live connection state into a compact traffic-light toolbar indicator with diagnostics and reconnect
+- Unified server, stack, and container list alignment and localized resource states
+- Documented and implemented the safety and API model for deletion, deployment, and update actions
+
+## 0.3.0
 - Added authenticated live updates with connection status and automatic reconnection
 - Added targeted refreshes for affected servers, stacks, and containers
 - Added configurable foreground polling for metrics and logs

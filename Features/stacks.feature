@@ -37,6 +37,24 @@ Feature: View stacks
     And further actions are disabled while the request is in progress
     And the server state is reloaded after it is accepted successfully
 
+  Scenario: Use state-aware stack actions
+    Given I have opened a stack detail view
+    Then no persistent action bar obscures the stack content
+    When its runtime state is loaded
+    Then a toolbar menu offers the applicable deploy, pull, restart, pause, resume, stop, or destroy actions
+    And every action shows a clear symbol and text label
+    And removal actions are separated from operational actions
+    And actions that are invalid for the current state are hidden
+    And destructive actions require confirmation
+
+  Scenario: Read combined stack logs
+    Given a stack contains multiple services
+    When I open the stack log viewer
+    Then logs from all services are shown by default
+    And I can select a subset of services and the number of recent lines
+    And I can filter stdout and stderr without leaving the viewer
+    And an empty log state is centered in the available log area
+
   Scenario: Start an individual service
     Given a service in the stack is stopped
     When I select the action to start that service
@@ -56,6 +74,13 @@ Feature: View stacks
     And search shows the match count and highlighted matches
     And input remains responsive for large logs
     And automatic refreshing ends when I leave the view
+
+  Scenario: Search a large log without blocking navigation
+    Given a large stack, service, or container log is open
+    When I enter or change a search term
+    Then filtering is debounced and performed outside the main actor
+    And obsolete search results are discarded
+    And only visible matching lines are rendered eagerly
 
   Scenario: Control log refreshing
     Given I have opened a service log view

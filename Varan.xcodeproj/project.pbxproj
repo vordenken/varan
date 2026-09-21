@@ -32,6 +32,7 @@
 		A10000000000000000000017 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001E /* AppSettings.swift */; };
 		A10000000000000000000018 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* SettingsView.swift */; };
 		A10000000000000000000019 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* AppSettingsTests.swift */; };
+		A1000000000000000000001A /* ScreenshotDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* ScreenshotDemo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +77,7 @@
 		B1000000000000000000001E /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		B1000000000000000000001F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B10000000000000000000020 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000021 /* ScreenshotDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotDemo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +126,7 @@
 			children = (
 				B10000000000000000000001 /* VaranApp.swift */,
 				B10000000000000000000002 /* AppShellView.swift */,
+				B10000000000000000000021 /* ScreenshotDemo.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -378,6 +381,7 @@
 				A10000000000000000000015 /* KomodoLiveUpdates.swift in Sources */,
 				A10000000000000000000017 /* AppSettings.swift in Sources */,
 				A10000000000000000000018 /* SettingsView.swift in Sources */,
+				A1000000000000000000001A /* ScreenshotDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -465,7 +469,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -494,7 +498,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

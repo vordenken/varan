@@ -78,6 +78,30 @@ actor KomodoAPIClient {
     let services: [String]
   }
 
+  private struct DeployStackParameters: Encodable {
+    let stack: String
+    let services: [String]
+    let stopTime: Int?
+
+    enum CodingKeys: String, CodingKey {
+      case stack, services
+      case stopTime = "stop_time"
+    }
+  }
+
+  private struct DestroyStackParameters: Encodable {
+    let stack: String
+    let services: [String]
+    let removeOrphans: Bool
+    let stopTime: Int?
+
+    enum CodingKeys: String, CodingKey {
+      case stack, services
+      case removeOrphans = "remove_orphans"
+      case stopTime = "stop_time"
+    }
+  }
+
   private struct StopStackParameters: Encodable {
     let stack: String
     let stopTime: Int?
@@ -93,6 +117,10 @@ actor KomodoAPIClient {
   private struct ContainerParameters: Encodable {
     let server: String
     let container: String
+  }
+
+  private struct DeleteResourceParameters: Encodable {
+    let id: String
   }
 
   private struct StopContainerParameters: Encodable {
@@ -232,12 +260,20 @@ actor KomodoAPIClient {
     try await write(type: "UpdateServer", parameters: UpdateServerParameters(id: id, config: config))
   }
 
+  func deleteServer(idOrName: String) async throws -> ServerDetail {
+    try await write(type: "DeleteServer", parameters: DeleteResourceParameters(id: idOrName))
+  }
+
   func createStack(name: String, config: StackConfigPatch) async throws -> StackDetail {
     try await write(type: "CreateStack", parameters: CreateStackParameters(name: name, config: config))
   }
 
   func updateStack(id: String, config: StackConfigPatch) async throws -> StackDetail {
     try await write(type: "UpdateStack", parameters: UpdateStackParameters(id: id, config: config))
+  }
+
+  func deleteStack(idOrName: String) async throws -> StackDetail {
+    try await write(type: "DeleteStack", parameters: DeleteResourceParameters(id: idOrName))
   }
 
   func listStackServices(stack idOrName: String) async throws -> [StackService] {
@@ -258,10 +294,61 @@ actor KomodoAPIClient {
     )
   }
 
+  func deployStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
+    try await execute(
+      type: "DeployStack",
+      parameters: DeployStackParameters(stack: idOrName, services: services, stopTime: nil)
+    )
+  }
+
+  func pullStackImages(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
+    try await execute(
+      type: "PullStack",
+      parameters: StackActionParameters(stack: idOrName, services: services)
+    )
+  }
+
+  func restartStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
+    try await execute(
+      type: "RestartStack",
+      parameters: StackActionParameters(stack: idOrName, services: services)
+    )
+  }
+
+  func pauseStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
+    try await execute(
+      type: "PauseStack",
+      parameters: StackActionParameters(stack: idOrName, services: services)
+    )
+  }
+
+  func unpauseStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
+    try await execute(
+      type: "UnpauseStack",
+      parameters: StackActionParameters(stack: idOrName, services: services)
+    )
+  }
+
   func stopStack(idOrName: String, services: [String] = []) async throws -> KomodoUpdate {
     try await execute(
       type: "StopStack",
       parameters: StopStackParameters(stack: idOrName, stopTime: nil, services: services)
+    )
+  }
+
+  func destroyStack(
+    idOrName: String,
+    services: [String] = [],
+    removeOrphans: Bool = false
+  ) async throws -> KomodoUpdate {
+    try await execute(
+      type: "DestroyStack",
+      parameters: DestroyStackParameters(
+        stack: idOrName,
+        services: services,
+        removeOrphans: removeOrphans,
+        stopTime: nil
+      )
     )
   }
 
@@ -272,9 +359,42 @@ actor KomodoAPIClient {
     )
   }
 
+  func restartContainer(server: String, container: String) async throws -> KomodoUpdate {
+    try await execute(
+      type: "RestartContainer",
+      parameters: ContainerParameters(server: server, container: container)
+    )
+  }
+
+  func pauseContainer(server: String, container: String) async throws -> KomodoUpdate {
+    try await execute(
+      type: "PauseContainer",
+      parameters: ContainerParameters(server: server, container: container)
+    )
+  }
+
+  func unpauseContainer(server: String, container: String) async throws -> KomodoUpdate {
+    try await execute(
+      type: "UnpauseContainer",
+      parameters: ContainerParameters(server: server, container: container)
+    )
+  }
+
   func stopContainer(server: String, container: String) async throws -> KomodoUpdate {
     try await execute(
       type: "StopContainer",
+      parameters: StopContainerParameters(
+        server: server,
+        container: container,
+        signal: nil,
+        time: nil
+      )
+    )
+  }
+
+  func destroyContainer(server: String, container: String) async throws -> KomodoUpdate {
+    try await execute(
+      type: "DestroyContainer",
       parameters: StopContainerParameters(
         server: server,
         container: container,

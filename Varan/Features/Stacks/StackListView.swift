@@ -48,6 +48,11 @@ struct StackListView: View {
         Button("action.addStack", systemImage: "plus") {
           showingCreate = true
         }
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") {
           Task { await loadStacks(reset: true) }
         }
@@ -133,15 +138,7 @@ struct StackListView: View {
   private func loadStacks(reset: Bool = true) async {
     loadState = .loading
     do {
-      guard let credentials = try await keychainStore.credentials(
-        for: profile.credentialAccount
-      ), credentials.authenticationKind == profile.authenticationKind else {
-        throw KeychainStoreError.invalidCredentialData
-      }
-      let client = KomodoAPIClient(
-        address: try profile.address,
-        authentication: credentials.authentication
-      )
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
       let page = reset ? 0 : nextPage
       let loadedStacks = try await client.listStacks(page: page, limit: pageSize)
       if reset {
@@ -167,27 +164,13 @@ private struct StackRow: View {
   let stack: StackListItem
 
   var body: some View {
-    HStack(spacing: 12) {
-      Image(systemName: stateSymbol)
-        .foregroundStyle(stateColor)
-        .frame(width: 24)
-        .accessibilityHidden(true)
-
-      VStack(alignment: .leading, spacing: 3) {
-        Text(stack.name)
-          .font(.headline)
-        Text(detail)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
-
-      Spacer()
-
-      Text(localizedState)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
+    ResourceListRow(
+      title: stack.name,
+      subtitle: detail,
+      status: localizedState,
+      symbol: resourceStateSymbol(stack.info.state),
+      symbolColor: resourceStateColor(stack.info.state)
+    )
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(Text(stack.name))
     .accessibilityValue(Text("\(detail), \(localizedState)"))
@@ -202,36 +185,6 @@ private struct StackRow: View {
   }
 
   private var localizedState: String {
-    switch stack.info.state {
-    case "running": String(localized: "state.running")
-    case "paused": String(localized: "state.paused")
-    case "stopped": String(localized: "state.stopped")
-    case "created": String(localized: "state.created")
-    case "restarting": String(localized: "state.restarting")
-    case "deploying": String(localized: "state.unknown")
-    case "unhealthy": String(localized: "state.unhealthy")
-    case "down": String(localized: "state.down")
-    default: String(localized: "state.unknown")
-    }
-  }
-
-  private var stateSymbol: String {
-    switch stack.info.state {
-    case "running": "checkmark.circle.fill"
-    case "paused", "stopped", "created": "pause.circle.fill"
-    case "deploying", "restarting": "arrow.trianglehead.2.clockwise.rotate.90.circle.fill"
-    case "unhealthy", "dead": "exclamationmark.triangle.fill"
-    case "down": "minus.circle.fill"
-    default: "questionmark.circle.fill"
-    }
-  }
-
-  private var stateColor: Color {
-    switch stack.info.state {
-    case "running": .green
-    case "unhealthy", "dead": .red
-    case "deploying", "restarting": .blue
-    default: .secondary
-    }
+    localizedResourceState(stack.info.state)
   }
 }

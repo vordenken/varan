@@ -107,11 +107,13 @@ final class KomodoLiveUpdateController: ObservableObject {
   init(
     transport: any LiveWebSocketTransport = URLSessionLiveWebSocketTransport(),
     reconnectDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4), .seconds(8), .seconds(15)],
-    sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+    initialStatus: LiveConnectionStatus = .offline
   ) {
     self.transport = transport
     self.reconnectDelays = reconnectDelays
     self.sleep = sleep
+    status = initialStatus
   }
 
   func start(address: ServerAddress, authentication: KomodoAuthentication) {
@@ -138,6 +140,10 @@ final class KomodoLiveUpdateController: ObservableObject {
 
   func reconnect(address: ServerAddress, authentication: KomodoAuthentication) {
     start(address: address, authentication: authentication)
+  }
+
+  func requestRefresh() {
+    refreshGeneration += 1
   }
 
   private func run(

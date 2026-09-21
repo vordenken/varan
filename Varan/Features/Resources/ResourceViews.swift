@@ -40,11 +40,6 @@ struct ResourceBrowserView: View {
       }
       .pickerStyle(.segmented)
       .padding()
-      LiveConnectionStatusView(
-        status: liveUpdates.status
-      )
-      .padding(.horizontal)
-      .padding(.bottom, 8)
       Divider()
 
       Group {
@@ -120,26 +115,53 @@ struct ResourceBrowserView: View {
   }
 }
 
-struct LiveConnectionStatusView: View {
-  let status: LiveConnectionStatus
+struct LiveConnectionStatusButton: View {
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
+  let profile: ServerProfile
+  let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
+
+  @State private var isPresented = false
+  @State private var retryError: String?
 
   var body: some View {
-    HStack(spacing: 7) {
+    Button {
+      isPresented.toggle()
+    } label: {
       Image(systemName: symbol)
         .foregroundStyle(color)
-        .accessibilityHidden(true)
-      Text(title)
-        .font(.caption.weight(.medium))
-      if status == .connecting {
-        ProgressView().controlSize(.mini)
-      }
-      Spacer()
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityLabel(title)
+    .popover(isPresented: $isPresented) {
+      VStack(alignment: .leading, spacing: 12) {
+        Label(title, systemImage: symbol)
+          .font(.headline)
+          .foregroundStyle(color)
+        Text(profile.name)
+          .font(.subheadline)
+        if !appSettings.liveUpdatesEnabled {
+          Text("status.liveUpdatesDisabled")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        if let retryError {
+          Text(retryError)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+        Button("action.reconnect", systemImage: "arrow.trianglehead.2.clockwise.rotate.90") {
+          Task { await reconnect() }
+        }
+        .disabled(!appSettings.liveUpdatesEnabled || liveUpdates.status == .connecting)
+      }
+      .padding()
+      .frame(minWidth: 220)
+      .presentationCompactAdaptation(.popover)
+    }
   }
 
   private var title: LocalizedStringKey {
-    switch status {
+    switch liveUpdates.status {
     case .connecting: "status.connecting"
     case .live: "status.live"
     case .offline: "status.offline"
@@ -147,19 +169,109 @@ struct LiveConnectionStatusView: View {
   }
 
   private var symbol: String {
-    switch status {
-    case .connecting: "network"
-    case .live: "bolt.horizontal.circle.fill"
-    case .offline: "wifi.slash"
+    switch liveUpdates.status {
+    case .connecting: "circle.dotted"
+    case .live: "circle.fill"
+    case .offline: "exclamationmark.circle.fill"
     }
   }
 
   private var color: Color {
-    switch status {
+    switch liveUpdates.status {
     case .connecting: .orange
     case .live: .green
-    case .offline: .secondary
+    case .offline: .red
     }
+  }
+
+  @MainActor
+  private func reconnect() async {
+    do {
+      guard let credentials = try await keychainStore.credentials(
+        for: profile.credentialAccount
+      ), credentials.authenticationKind == profile.authenticationKind else {
+        throw KeychainStoreError.invalidCredentialData
+      }
+      liveUpdates.reconnect(
+        address: try profile.address,
+        authentication: credentials.authentication
+      )
+      retryError = nil
+    } catch {
+      retryError = error.localizedDescription
+    }
+  }
+}
+
+struct ResourceListRow: View {
+  let title: String
+  let subtitle: String?
+  let status: String?
+  let symbol: String
+  let symbolColor: Color
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Image(systemName: symbol)
+        .foregroundStyle(symbolColor)
+        .frame(width: 24)
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title)
+          .font(.headline)
+        if let subtitle, !subtitle.isEmpty {
+          Text(subtitle)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+      }
+
+      Spacer()
+
+      if let status, !status.isEmpty {
+        Text(status)
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+func localizedResourceState(_ rawState: String) -> String {
+  switch rawState.lowercased() {
+  case "running", "healthy": String(localized: "state.running")
+  case "paused": String(localized: "state.paused")
+  case "stopped", "exited": String(localized: "state.stopped")
+  case "created": String(localized: "state.created")
+  case "restarting": String(localized: "state.restarting")
+  case "deploying": String(localized: "state.deploying")
+  case "removing": String(localized: "state.removing")
+  case "unhealthy", "dead": String(localized: "state.unhealthy")
+  case "down": String(localized: "state.down")
+  default: String(localized: "state.unknown")
+  }
+}
+
+func resourceStateSymbol(_ rawState: String) -> String {
+  switch rawState.lowercased() {
+  case "running", "healthy": "checkmark.circle.fill"
+  case "paused", "stopped", "exited", "created": "pause.circle.fill"
+  case "deploying", "restarting", "removing":
+    "arrow.trianglehead.2.clockwise.rotate.90.circle.fill"
+  case "unhealthy", "dead": "exclamationmark.triangle.fill"
+  case "down": "minus.circle.fill"
+  default: "questionmark.circle.fill"
+  }
+}
+
+func resourceStateColor(_ rawState: String) -> Color {
+  switch rawState.lowercased() {
+  case "running", "healthy": .green
+  case "unhealthy", "dead": .red
+  case "deploying", "restarting", "removing": .blue
+  default: .secondary
   }
 }
 
@@ -167,6 +279,11 @@ struct LiveConnectionStatusView: View {
 func makeKomodoClient(profile: ServerProfile, keychainStore: KeychainStore) async throws
   -> KomodoAPIClient
 {
+#if DEBUG
+  if ScreenshotDemo.enabled {
+    return ScreenshotDemo.makeClient()
+  }
+#endif
   guard let credentials = try await keychainStore.credentials(for: profile.credentialAccount),
         credentials.authenticationKind == profile.authenticationKind else {
     throw KeychainStoreError.invalidCredentialData
@@ -205,24 +322,15 @@ struct ServerListView: View {
             )
               .environmentObject(liveUpdates)
           } label: {
-            HStack {
-              Image(systemName: server.info.state == .ok ? "checkmark.circle.fill" : "server.rack")
-                .foregroundStyle(server.info.state == .ok ? .green : .secondary)
-              VStack(alignment: .leading) {
-                Text(server.name).font(.headline)
-                Text([server.info.region, server.info.address ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                  .font(.subheadline).foregroundStyle(.secondary)
-              }
-              Spacer()
-              if let stats = server.info.stats {
-                Text(String(
-                  format: String(localized: "metrics.cpuCompact"),
-                  stats.cpuPercent
-                ))
-                  .font(.caption.monospacedDigit())
-                  .accessibilityLabel("field.cpu")
-              }
-            }
+            ResourceListRow(
+              title: server.name,
+              subtitle: serverSubtitle(server),
+              status: server.info.stats.map {
+                String(format: String(localized: "metrics.cpuCompact"), $0.cpuPercent)
+              },
+              symbol: server.info.state == .ok ? "checkmark.circle.fill" : "server.rack",
+              symbolColor: server.info.state == .ok ? .green : .secondary
+            )
           }
         }
         .refreshable { await load() }
@@ -234,6 +342,11 @@ struct ServerListView: View {
     .toolbar {
       ToolbarItemGroup(placement: .primaryAction) {
         Button("action.addServer", systemImage: "plus") { showingCreate = true }
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
           .disabled(isLoading)
       }
@@ -261,6 +374,13 @@ struct ServerListView: View {
       || $0.info.region.localizedCaseInsensitiveContains(searchText) }
   }
 
+  private func serverSubtitle(_ server: ServerListItem) -> String? {
+    let subtitle = [server.info.region, server.info.address ?? ""]
+      .filter { !$0.isEmpty }
+      .joined(separator: " · ")
+    return subtitle.isEmpty ? nil : subtitle
+  }
+
   @MainActor private func load() async {
     isLoading = true
     defer { isLoading = false }
@@ -273,6 +393,7 @@ struct ServerListView: View {
 }
 
 struct ServerDetailView: View {
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let summary: ServerListItem
@@ -293,6 +414,8 @@ struct ServerDetailView: View {
   @State private var isLoadingContainers = true
   @State private var isLoadingHistory = true
   @State private var showingEditor = false
+  @State private var confirmsDelete = false
+  @State private var isDeleting = false
   @State private var granularity = "15-min"
 
   var body: some View {
@@ -402,8 +525,35 @@ struct ServerDetailView: View {
     .toolbar {
       ToolbarItemGroup {
         Button("action.edit", systemImage: "pencil") { showingEditor = true }.disabled(server == nil)
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }.disabled(isLoading)
+        Menu("action.more", systemImage: "ellipsis.circle") {
+          Button("action.deleteServer", systemImage: "trash", role: .destructive) {
+            confirmsDelete = true
+          }
+        }
+        .disabled(isLoading || isDeleting)
       }
+    }
+    .confirmationDialog(
+      "confirm.deleteServer.title",
+      isPresented: $confirmsDelete,
+      titleVisibility: .visible
+    ) {
+      Button("action.deleteServer", role: .destructive) {
+        Task { await deleteServer() }
+      }
+      Button("action.cancel", role: .cancel) {}
+    } message: {
+      Text(String(
+        format: String(localized: "confirm.deleteServer.message"),
+        stacks.count,
+        containers.count
+      ))
     }
     .sheet(isPresented: $showingEditor) {
       if let server {
@@ -522,7 +672,21 @@ struct ServerDetailView: View {
   }
 
   private var isLoading: Bool {
-    isLoadingDetails || isLoadingMetrics || isLoadingStacks || isLoadingContainers
+    isLoadingDetails || isLoadingMetrics || isLoadingStacks || isLoadingContainers || isDeleting
+  }
+
+  @MainActor
+  private func deleteServer() async {
+    isDeleting = true
+    defer { isDeleting = false }
+    do {
+      _ = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+        .deleteServer(idOrName: summary.id)
+      liveUpdates.requestRefresh()
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
   }
 
   private func localizedServerState(_ state: KomodoServerState) -> String {
@@ -609,7 +773,12 @@ struct ContainerListView: View {
     .navigationTitle("title.containers")
     .searchable(text: $searchText, prompt: "action.searchContainers")
     .toolbar {
-      ToolbarItem(placement: .primaryAction) {
+      ToolbarItemGroup(placement: .primaryAction) {
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
           .disabled(isLoading)
       }
@@ -646,21 +815,58 @@ struct ContainerListView: View {
 struct ContainerRow: View {
   let container: ContainerListItem
   var body: some View {
-    HStack {
-      Image(systemName: container.state.lowercased() == "running" ? "checkmark.circle.fill" : "shippingbox")
-        .foregroundStyle(container.state.lowercased() == "running" ? .green : .secondary)
-      VStack(alignment: .leading) {
-        Text(container.name).font(.headline)
-        Text([container.image ?? "", container.serverName ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-          .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-      }
-      Spacer()
-      Text(container.state).font(.caption).foregroundStyle(.secondary)
-    }
+    ResourceListRow(
+      title: container.name,
+      subtitle: [container.image ?? "", container.serverName ?? ""]
+        .filter { !$0.isEmpty }
+        .joined(separator: " · "),
+      status: localizedResourceState(container.state),
+      symbol: resourceStateSymbol(container.state),
+      symbolColor: resourceStateColor(container.state)
+    )
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(container.name))
+    .accessibilityValue(Text(localizedResourceState(container.state)))
   }
 }
 
+private enum ContainerResourceAction: String, Identifiable {
+  case start
+  case restart
+  case pause
+  case resume
+  case stop
+  case destroy
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .start: String(localized: "action.start")
+    case .restart: String(localized: "action.restart")
+    case .pause: String(localized: "action.pause")
+    case .resume: String(localized: "action.resume")
+    case .stop: String(localized: "action.stop")
+    case .destroy: String(localized: "action.removeContainer")
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .start, .resume: "play.fill"
+    case .restart: "arrow.clockwise"
+    case .pause: "pause.fill"
+    case .stop: "stop.fill"
+    case .destroy: "trash"
+    }
+  }
+
+  var isDestructive: Bool { self == .stop || self == .destroy }
+  var isRemoval: Bool { self == .destroy }
+}
+
 struct ContainerDetailView: View {
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let container: ContainerListItem
@@ -668,11 +874,11 @@ struct ContainerDetailView: View {
   let keychainStore: KeychainStore
   @ObservedObject var appSettings: AppSettings
   var ownerStack: StackDetail? = nil
-  @State private var log: KomodoLog?
-  @State private var errorMessage: String?
-  @State private var isLoadingLog = false
   @State private var showingStackEditor = false
   @State private var updatedContainer: ContainerListItem?
+  @State private var activeAction: ContainerResourceAction?
+  @State private var pendingAction: ContainerResourceAction?
+  @State private var actionError: String?
 
   var body: some View {
     List {
@@ -712,26 +918,64 @@ struct ContainerDetailView: View {
       }
       if !displayedContainer.networks.isEmpty { Section("section.networks") { ForEach(displayedContainer.networks, id: \.self, content: Text.init) } }
       if !displayedContainer.volumes.isEmpty { Section("section.volumes") { ForEach(displayedContainer.volumes, id: \.self, content: Text.init) } }
-      Section("section.logs") {
-        if isLoadingLog { CenteredLoadingRow("status.loadingLogs") }
-        else if let log { Text(log.combinedOutput).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
-        else { Text(errorMessage ?? String(localized: "label.noLogOutput")).foregroundStyle(.secondary) }
+      Section("section.observability") {
+        if let logSource {
+          NavigationLink {
+            LogViewerView(
+              profile: profile,
+              keychainStore: keychainStore,
+              source: logSource,
+              appSettings: appSettings
+            )
+            .environmentObject(liveUpdates)
+          } label: {
+            Label("action.openContainerLogs", systemImage: "doc.text.magnifyingglass")
+          }
+        } else {
+          Label("message.logsUnavailable", systemImage: "doc.text.magnifyingglass")
+            .foregroundStyle(.secondary)
+        }
       }
     }
     .navigationTitle(displayedContainer.name)
     .toolbar {
       ToolbarItemGroup {
-        if ownerStack != nil {
-          Button("action.editContainerConfiguration", systemImage: "pencil") { showingStackEditor = true }
-        }
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") {
-          Task {
-            async let logResult: Void = loadLog()
-            async let metricsResult: Void = loadMetrics()
-            _ = await (logResult, metricsResult)
-          }
+          Task { await loadMetrics() }
         }
+        .disabled(activeAction != nil)
+        ContainerActionMenu(
+          state: displayedContainer.state,
+          isEnabled: displayedContainer.serverID != nil,
+          activeAction: activeAction,
+          canEdit: ownerStack != nil,
+          edit: { showingStackEditor = true },
+          perform: handleAction
+        )
       }
+    }
+    .confirmationDialog(
+      pendingAction?.title ?? String(localized: "title.containerActions"),
+      isPresented: confirmsAction,
+      titleVisibility: .visible,
+      presenting: pendingAction
+    ) { action in
+      Button(action.title, role: action.isDestructive ? .destructive : nil) {
+        Task { await runAction(action) }
+      }
+      Button("action.cancel", role: .cancel) {}
+    } message: { action in
+      Text(confirmationMessage(for: action))
+    }
+    .alert("alert.actionFailed", isPresented: showsActionError) {
+      Button("action.ok") { actionError = nil }
+    } message: {
+      Text(actionError ?? String(localized: "error.unknown"))
     }
     .sheet(isPresented: $showingStackEditor) {
       if let ownerStack {
@@ -742,7 +986,6 @@ struct ContainerDetailView: View {
         }
       }
     }
-    .task { await loadLog() }
     .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
       await loadMetrics()
       while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
@@ -765,15 +1008,80 @@ struct ContainerDetailView: View {
     updatedContainer ?? container
   }
 
-  @MainActor private func loadLog() async {
-    guard let server = container.serverID else { return }
-    isLoadingLog = true
-    defer { isLoadingLog = false }
+  private var logSource: LogSource? {
+    guard let serverID = displayedContainer.serverID else { return nil }
+    return .container(serverID: serverID, name: displayedContainer.name)
+  }
+
+  private var confirmsAction: Binding<Bool> {
+    Binding(
+      get: { pendingAction != nil },
+      set: { if !$0 { pendingAction = nil } }
+    )
+  }
+
+  private var showsActionError: Binding<Bool> {
+    Binding(
+      get: { actionError != nil },
+      set: { if !$0 { actionError = nil } }
+    )
+  }
+
+  private func handleAction(_ action: ContainerResourceAction) {
+    switch action {
+    case .stop, .destroy:
+      pendingAction = action
+    default:
+      Task { await runAction(action) }
+    }
+  }
+
+  private func confirmationMessage(for action: ContainerResourceAction) -> String {
+    let name = displayedContainer.name
+    return switch action {
+    case .destroy where ownerStack != nil:
+      String(format: String(localized: "confirm.removeOwnedContainer.message"), name)
+    case .destroy:
+      String(format: String(localized: "confirm.removeContainer.message"), name)
+    case .stop:
+      String(format: String(localized: "confirm.stopContainer.message"), name)
+    default:
+      String(format: String(localized: "confirm.containerAction.message"), name)
+    }
+  }
+
+  @MainActor
+  private func runAction(_ action: ContainerResourceAction) async {
+    pendingAction = nil
+    guard let serverID = displayedContainer.serverID else {
+      actionError = String(localized: "error.container.serverMissing")
+      return
+    }
+    activeAction = action
+    defer { activeAction = nil }
     do {
-      log = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-        .getContainerLog(server: server, container: container.name)
-      errorMessage = nil
-    } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      switch action {
+      case .start:
+        _ = try await client.startContainer(server: serverID, container: displayedContainer.name)
+      case .restart:
+        _ = try await client.restartContainer(server: serverID, container: displayedContainer.name)
+      case .pause:
+        _ = try await client.pauseContainer(server: serverID, container: displayedContainer.name)
+      case .resume:
+        _ = try await client.unpauseContainer(server: serverID, container: displayedContainer.name)
+      case .stop:
+        _ = try await client.stopContainer(server: serverID, container: displayedContainer.name)
+      case .destroy:
+        _ = try await client.destroyContainer(server: serverID, container: displayedContainer.name)
+        liveUpdates.requestRefresh()
+        dismiss()
+        return
+      }
+      await loadMetrics()
+    } catch {
+      actionError = error.localizedDescription
+    }
   }
 
   @MainActor private func loadMetrics() async {
@@ -786,6 +1094,64 @@ struct ContainerDetailView: View {
       }
     } catch is CancellationError {} catch {
       // Keep the most recent metrics while transient polling fails.
+    }
+  }
+}
+
+private struct ContainerActionMenu: View {
+  let state: String
+  let isEnabled: Bool
+  let activeAction: ContainerResourceAction?
+  let canEdit: Bool
+  let edit: () -> Void
+  let perform: (ContainerResourceAction) -> Void
+
+  var body: some View {
+    Menu {
+      if canEdit {
+        Button("action.editContainerConfiguration", systemImage: "pencil", action: edit)
+      }
+
+      Section("section.operationActions") {
+        ForEach(actions.filter { !$0.isRemoval }) { action in
+          actionButton(action)
+        }
+      }
+
+      if actions.contains(where: \.isRemoval) {
+        Section("section.destructiveActions") {
+          ForEach(actions.filter(\.isRemoval)) { action in
+            actionButton(action)
+          }
+        }
+      }
+    } label: {
+      if let activeAction {
+        ProgressView()
+          .controlSize(.small)
+          .accessibilityLabel(activeAction.title)
+      } else {
+        Label("title.containerActions", systemImage: "ellipsis.circle")
+      }
+    }
+    .disabled(!isEnabled || activeAction != nil)
+    .accessibilityLabel(activeAction?.title ?? String(localized: "title.containerActions"))
+  }
+
+  private func actionButton(_ action: ContainerResourceAction) -> some View {
+    Button(role: action.isDestructive ? .destructive : nil) {
+      perform(action)
+    } label: {
+      Label(action.title, systemImage: action.symbol)
+    }
+  }
+
+  private var actions: [ContainerResourceAction] {
+    switch state.lowercased() {
+    case "running": [.restart, .pause, .stop, .destroy]
+    case "paused": [.resume, .stop, .restart, .destroy]
+    case "created", "exited", "stopped", "dead": [.start, .destroy]
+    default: [.start, .restart, .destroy]
     }
   }
 }
