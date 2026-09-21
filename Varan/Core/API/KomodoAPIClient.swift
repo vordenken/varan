@@ -191,6 +191,10 @@ actor KomodoAPIClient {
     try await read(type: "GetServer", parameters: ServerParameters(server: idOrName))
   }
 
+  func getServerState(idOrName: String) async throws -> ServerStateResponse {
+    try await read(type: "GetServerState", parameters: ServerParameters(server: idOrName))
+  }
+
   func getSystemStats(server: String) async throws -> SystemStats {
     try await read(type: "GetSystemStats", parameters: ServerParameters(server: server))
   }

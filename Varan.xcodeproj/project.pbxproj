@@ -27,6 +27,11 @@
 		A10000000000000000000012 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* Localizable.xcstrings */; };
 		A10000000000000000000013 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* InfoPlist.strings */; };
 		A10000000000000000000014 /* ResourceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001B /* ResourceViews.swift */; };
+		A10000000000000000000015 /* KomodoLiveUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001C /* KomodoLiveUpdates.swift */; };
+		A10000000000000000000016 /* KomodoLiveUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001D /* KomodoLiveUpdateTests.swift */; };
+		A10000000000000000000017 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001E /* AppSettings.swift */; };
+		A10000000000000000000018 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* SettingsView.swift */; };
+		A10000000000000000000019 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* AppSettingsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +71,11 @@
 		B10000000000000000000018 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B10000000000000000000019 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B1000000000000000000001B /* ResourceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceViews.swift; sourceTree = "<group>"; };
+		B1000000000000000000001C /* KomodoLiveUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KomodoLiveUpdates.swift; sourceTree = "<group>"; };
+		B1000000000000000000001D /* KomodoLiveUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KomodoLiveUpdateTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000001E /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		B1000000000000000000001F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +134,7 @@
 				D10000000000000000000006 /* API */,
 				D10000000000000000000007 /* Persistence */,
 				D1000000000000000000000D /* Security */,
+				D10000000000000000000011 /* Settings */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -132,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000004 /* KomodoAPIClient.swift */,
+				B1000000000000000000001C /* KomodoLiveUpdates.swift */,
 				B10000000000000000000010 /* KomodoModels.swift */,
 			);
 			path = API;
@@ -152,6 +164,7 @@
 				D1000000000000000000000E /* Connections */,
 				D1000000000000000000000F /* Stacks */,
 				D10000000000000000000010 /* Resources */,
+				D10000000000000000000012 /* Settings */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -173,6 +186,8 @@
 			children = (
 				B10000000000000000000007 /* ServerAddressTests.swift */,
 				B1000000000000000000000C /* KomodoAPIClientTests.swift */,
+				B1000000000000000000001D /* KomodoLiveUpdateTests.swift */,
+				B10000000000000000000020 /* AppSettingsTests.swift */,
 				B1000000000000000000000D /* KeychainStoreTests.swift */,
 				B10000000000000000000012 /* PersistenceTests.swift */,
 			);
@@ -203,6 +218,22 @@
 				B1000000000000000000000F /* StoredCredentials.swift */,
 			);
 			path = Security;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000011 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000000000000000001E /* AppSettings.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000012 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000000000000000001F /* SettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		D1000000000000000000000E /* Connections */ = {
@@ -344,6 +375,9 @@
 				A1000000000000000000000E /* StackListView.swift in Sources */,
 				A10000000000000000000011 /* StackDetailView.swift in Sources */,
 				A10000000000000000000014 /* ResourceViews.swift in Sources */,
+				A10000000000000000000015 /* KomodoLiveUpdates.swift in Sources */,
+				A10000000000000000000017 /* AppSettings.swift in Sources */,
+				A10000000000000000000018 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,6 +387,8 @@
 			files = (
 				A10000000000000000000007 /* ServerAddressTests.swift in Sources */,
 				A10000000000000000000009 /* KomodoAPIClientTests.swift in Sources */,
+				A10000000000000000000016 /* KomodoLiveUpdateTests.swift in Sources */,
+				A10000000000000000000019 /* AppSettingsTests.swift in Sources */,
 				A1000000000000000000000A /* KeychainStoreTests.swift in Sources */,
 				A1000000000000000000000F /* PersistenceTests.swift in Sources */,
 			);
@@ -429,7 +465,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -458,7 +494,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

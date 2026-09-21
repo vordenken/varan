@@ -5,6 +5,7 @@ import SwiftData
 struct VaranApp: App {
   @State private var startupState = StartupState.loading
   @State private var startupAttempt = 0
+  @StateObject private var appSettings = AppSettings()
 
   var body: some Scene {
     WindowGroup {
@@ -13,6 +14,12 @@ struct VaranApp: App {
           await prepareModelContainer()
         }
     }
+#if os(macOS)
+    Settings {
+      settingsContent
+        .frame(minWidth: 520, minHeight: 560)
+    }
+#endif
   }
 
   @ViewBuilder
@@ -21,7 +28,7 @@ struct VaranApp: App {
     case .loading:
       StartupView()
     case .ready(let container):
-      AppShellView()
+      AppShellView(appSettings: appSettings)
         .modelContainer(container)
     case .failed(let message):
       StartupFailureView(message: message) {
@@ -30,6 +37,25 @@ struct VaranApp: App {
       }
     }
   }
+
+#if os(macOS)
+  @ViewBuilder
+  private var settingsContent: some View {
+    switch startupState {
+    case .loading:
+      ProgressView("app.preparing")
+    case .ready(let container):
+      SettingsView(settings: appSettings)
+        .modelContainer(container)
+    case .failed(let message):
+      ContentUnavailableView(
+        "app.start.failed",
+        systemImage: "externaldrive.badge.exclamationmark",
+        description: Text(message)
+      )
+    }
+  }
+#endif
 
   @MainActor
   private func prepareModelContainer() async {

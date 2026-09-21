@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StackListView: View {
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   private enum LoadState: Equatable {
     case loading
     case loaded
@@ -9,6 +10,7 @@ struct StackListView: View {
 
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
 
   @State private var stacks: [StackListItem] = []
   @State private var loadState = LoadState.loading
@@ -42,16 +44,14 @@ struct StackListView: View {
     .navigationTitle("title.stacks")
     .searchable(text: $searchText, prompt: "title.stacks")
     .toolbar {
-      ToolbarItem {
+      ToolbarItemGroup(placement: .primaryAction) {
+        Button("action.addStack", systemImage: "plus") {
+          showingCreate = true
+        }
         Button("action.refresh", systemImage: "arrow.clockwise") {
           Task { await loadStacks(reset: true) }
         }
         .disabled(loadState == .loading)
-      }
-      ToolbarItem {
-        Button("action.addStack", systemImage: "plus") {
-          showingCreate = true
-        }
       }
     }
     .sheet(isPresented: $showingCreate) {
@@ -64,6 +64,14 @@ struct StackListView: View {
     }
     .task(id: profile.id) {
       await loadStacks(reset: true)
+    }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.stack) || event.affects(.server) {
+        Task { await loadStacks(reset: true) }
+      }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await loadStacks(reset: true) }
     }
   }
 
@@ -85,8 +93,10 @@ struct StackListView: View {
             StackDetailView(
               summary: stack,
               profile: profile,
-              keychainStore: keychainStore
+              keychainStore: keychainStore,
+              appSettings: appSettings
             )
+            .environmentObject(liveUpdates)
           } label: {
             StackRow(stack: stack)
           }

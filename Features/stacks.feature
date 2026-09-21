@@ -59,6 +59,6 @@ Feature: View stacks
 
   Scenario: Control log refreshing
     Given I have opened a service log view
-    When I open the log settings
+    When I open the application settings
     Then I can control automatic refreshing and following new lines independently
     And I can refresh the logs immediately regardless of those settings

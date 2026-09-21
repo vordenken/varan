@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct StackDetailView: View {
+  @Environment(\.scenePhase) private var scenePhase
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   private enum LoadState: Equatable {
     case loading
     case loaded
@@ -22,6 +24,7 @@ struct StackDetailView: View {
   let summary: StackListItem
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
 
   @State private var detail: StackDetail?
   @State private var services: [StackService] = []
@@ -87,6 +90,21 @@ struct StackDetailView: View {
     .task(id: summary.id) {
       await loadContent()
     }
+    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
+      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
+        guard !Task.isCancelled else { return }
+        await loadContent(showProgress: false)
+      }
+    }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.stack, id: summary.id) || event.affects(.server) {
+        Task { await loadContent(showProgress: false) }
+      }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await loadContent(showProgress: false) }
+    }
     .confirmationDialog(
       stopTitle,
       isPresented: confirmsStop,
@@ -148,14 +166,17 @@ struct StackDetailView: View {
                   container: container,
                   profile: profile,
                   keychainStore: keychainStore,
+                  appSettings: appSettings,
                   ownerStack: detail
                 )
+                .environmentObject(liveUpdates)
               } else {
                 StackLogView(
                   profile: profile,
                   keychainStore: keychainStore,
                   stackID: summary.id,
-                  service: service
+                  service: service,
+                  appSettings: appSettings
                 )
               }
             } label: {
@@ -305,8 +326,8 @@ struct StackDetailView: View {
   }
 
   @MainActor
-  private func loadContent() async {
-    loadState = .loading
+  private func loadContent(showProgress: Bool = true) async {
+    if showProgress { loadState = .loading }
     do {
       let client = try await makeClient()
       async let loadedDetail = client.getStack(idOrName: summary.id)
@@ -598,18 +619,33 @@ private struct StackLogView: View {
   let keychainStore: KeychainStore
   let stackID: String
   let service: StackService
+  @ObservedObject var appSettings: AppSettings
 
   @State private var log: KomodoLog?
   @State private var searchText = ""
   @State private var errorMessage: String?
   @State private var isLoading = true
-  @State private var refreshesAutomatically = true
-  @State private var followsLatest = true
+  @State private var followsLatest: Bool
   @State private var selectedStream = Stream.combined
   @State private var searchResult = LogSearch.Result(output: "", query: "", matchCount: 0)
   @State private var highlightedOutput = AttributedString()
   @State private var highlightedLines: [AttributedString] = []
   @State private var logRevision = 0
+
+  init(
+    profile: ServerProfile,
+    keychainStore: KeychainStore,
+    stackID: String,
+    service: StackService,
+    appSettings: AppSettings
+  ) {
+    self.profile = profile
+    self.keychainStore = keychainStore
+    self.stackID = stackID
+    self.service = service
+    self.appSettings = appSettings
+    _followsLatest = State(initialValue: appSettings.logsFollowLatest)
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -645,23 +681,25 @@ private struct StackLogView: View {
         }
         .disabled(isLoading)
 
-        Menu("log.settings", systemImage: "slider.horizontal.3") {
-          Toggle("log.autoRefresh", isOn: $refreshesAutomatically)
-          Toggle("log.followLatest", isOn: $followsLatest)
-        }
       }
     }
-    .task(id: refreshesAutomatically) {
+    .task(id: "\(appSettings.logsAutoRefresh)-\(appSettings.logRefreshInterval.rawValue)") {
       await loadLog()
-      while refreshesAutomatically, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(5))
+      while appSettings.logsAutoRefresh, !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(appSettings.logRefreshInterval.rawValue))
         guard !Task.isCancelled else { return }
         await loadLog(showProgress: false)
       }
     }
+    .onChange(of: appSettings.logsFollowLatest) { _, follows in
+      followsLatest = follows
+    }
     .task(id: searchTaskID) {
       await updateSearchResult()
     }
+#if os(iOS)
+    .toolbar(.hidden, for: .tabBar)
+#endif
   }
 
   private var logControls: some View {

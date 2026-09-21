@@ -1,6 +1,20 @@
-0.2.0
+0.3.0
 ---
 ### Development Preview
+- Added authenticated live updates with connection status and automatic reconnection
+- Added targeted refreshes for affected servers, stacks, and containers
+- Added configurable foreground polling for metrics and logs
+- Added centralized app settings with persistent preferences and safe reset
+- Added adaptive resource and settings tabs with Liquid Glass on supported systems
+- Moved Komodo instance management into the app settings
+- Clarified live connection status, resource metrics, loading states, and toolbar actions
+- Added first-launch onboarding for secure setup of one or more Komodo instances
+- Corrected server state decoding against Komodo's current read API contract
+- Centered independent loading states for server metrics and related resources
+- Refined the first-launch presentation around Varan's user-facing capabilities
+- Fixed hourly server history requests and kept history controls visible while loading
+
+## 0.2.0
 - Added dedicated server, stack, and container navigation
 - Added current and historical server metrics plus container and stack metrics
 - Added safe, typed creation and editing for supported server and stack settings

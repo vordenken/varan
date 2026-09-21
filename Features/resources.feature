@@ -11,12 +11,44 @@ Feature: Browse and manage Komodo resources
     And I can move between the related server, stack, and container
     And the selected connection remains unchanged
 
+  Scenario: Switch primary resource areas
+    Given I have selected a saved and reachable connection
+    When I use the primary navigation tabs
+    Then I can switch between servers, stacks, containers, and application settings
+    And each resource tab preserves its own navigation context
+    And the live connection remains shared across the resource tabs
+
   Scenario: Inspect a server
     Given a managed server is reachable
     When I open its detail view
     Then I see its state and system information
     And I see the stacks and containers associated with it
     And unavailable information is distinguished from an empty value
+
+  Scenario: Load related server resources
+    Given I have opened a server detail view
+    When its metrics, stacks, and containers are still loading
+    Then loading indicators are shown instead of empty-state messages
+    And section loading indicators are centered consistently
+    And empty-state messages appear only after loading completes
+
+  Scenario: Display the canonical server state
+    Given a managed server summary reports its current state
+    When I open its detail view
+    Then the state is refreshed through the server state read API
+    And missing detail metadata does not replace the state with unknown
+
+  Scenario: Change historical metrics granularity
+    Given a server history chart is visible
+    When I switch between fifteen minutes, one hour, and one day
+    Then Varan sends the granularity expected by Komodo
+    And the history section remains visible while the new data loads
+    And a failed or empty response is explained without removing the controls
+
+  Scenario: Use consistent resource actions
+    Given I am viewing a server or stack list
+    Then the add action appears before the refresh action
+    And a container list only offers refresh because containers belong to stacks
 
   Scenario: Inspect a stack container
     Given a stack contains a running container
