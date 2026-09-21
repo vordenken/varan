@@ -7,7 +7,7 @@
   >
   <h1>Varan</h1>
   <p><strong>A native Komodo companion for iPhone, iPad, and Mac.</strong></p>
-  <p>Monitor and control your self-hosted Komodo instances.</p>
+  <p>Monitor and manage your self-hosted Komodo environments wherever you are.</p>
 </div>
 
 > [!IMPORTANT]
@@ -19,32 +19,32 @@ Varan is an independent native client for self-hosted
 with or endorsed by the Komodo project and does not use upstream trademarks,
 brand assets, or source code.
 
-## What Varan does
+## Features
 
-Varan keeps your Komodo environments within reach across Apple platforms. Add
-one or more connections, browse servers, stacks, and containers, inspect
-metrics and logs, and manage supported settings without leaving the app.
-
-The shared SwiftUI app adapts its navigation to iPhone, iPad, and Mac while
-using the same connection and security model on every platform.
-
-## Highlights
-
-- **Resource browser:** move between dedicated server, stack, and container
-  views with adaptive navigation.
-- **Metrics:** inspect current resource usage and historical server data.
-- **Safe changes:** create and edit supported server and stack settings through
-  typed, partial updates.
-- **Controls and logs:** start or stop workloads after confirmation and search
-  automatically refreshed logs.
-- **Multiple environments:** save connections and switch between them.
-- **Flexible authentication:** connect with a Komodo API key or JWT.
-- **Native security:** keep credentials in the system Keychain and non-secret
-  profile metadata in SwiftData.
+- **Native on Apple platforms:** one SwiftUI app designed for iPhone, iPad, and
+  Mac, with navigation and controls that adapt to each platform.
+- **Multiple Komodo instances:** add, switch between, and centrally manage
+  multiple environments. Read their current state and apply supported
+  configuration changes directly from Varan.
+- **Servers, stacks, and containers:** browse related resources, inspect their
+  state, and move naturally from an environment overview into the details.
+- **Live updates:** receive authenticated Komodo events over WebSocket, refresh
+  affected views automatically, and reconnect after interruptions.
+- **Metrics and history:** monitor current resource usage and explore historical
+  server data across multiple time ranges.
+- **Logs and workload controls:** search and follow container logs, then start or
+  stop supported workloads with clear confirmation.
+- **Safe configuration editing:** create and edit supported server and stack
+  settings using typed, partial updates while preserving Komodo's API semantics.
+- **Secure connections:** authenticate with an API key or JWT. Credentials stay
+  in the system Keychain, and remote connections require HTTPS.
+- **Guided setup and centralized settings:** connect the first instance through
+  onboarding, then manage connections, live updates, polling, and app behavior
+  from one settings screen.
+- **English and German:** follow the system language across all supported
+  platforms.
 
 ## Native on iPhone, iPad, and Mac
-
-### iPhone
 
 <p align="center">
   <img src="Docs/Screenshots/ios-server-detail.png" alt="Inspect server metrics and related resources in Varan" width="30%">
@@ -52,104 +52,44 @@ using the same connection and security model on every platform.
   <img src="Docs/Screenshots/ios-container-detail.png" alt="Inspect container resource usage and configuration in Varan" width="30%">
 </p>
 
-## Connections and security
+The shared app uses a compact tab-based experience on iPhone and iPad and a
+native sidebar on Mac. App settings and Komodo instance management remain in a
+single predictable place on every platform.
 
-Credentials are never logged and are stored exclusively in the system
-Keychain. SwiftData stores only the profile name, server address,
-authentication type, and a non-secret Keychain reference.
+## Connection and update behavior
 
-External server connections must use HTTPS. Plain HTTP is accepted only for
-local addresses, making local development possible without weakening remote
-connections. Network requests run through an actor-isolated `URLSession`
-client, and Keychain access is isolated separately.
+When no connection exists, Varan guides you through adding the first Komodo
+instance. Additional instances can be added and managed later in Settings.
+Removing the last saved instance returns the app to onboarding.
 
-## Requirements
+While a profile is active, Varan listens to Komodo's authenticated update
+stream and refreshes resources affected by incoming events. Metrics and logs
+use independent foreground refresh intervals because not every change produces
+a WebSocket event. Connection state and refresh preferences are visible and
+configurable in the app.
 
-- Xcode 27 or later
-- Swift 6
-- iOS or iPadOS 18 or later
-- macOS 15 or later
-- Access to a Komodo instance
+Credentials are never logged or stored outside the system Keychain. Varan
+stores only non-secret profile information and Keychain references in its local
+database. Plain HTTP is accepted only for local addresses; external Komodo
+instances must use HTTPS.
 
 ## Build from source
 
-Clone the repository and open `Varan.xcodeproj` in Xcode. Unsigned tests and
-simulator builds work without an Apple Development team.
-
-For a signed local build, copy
-`Configuration/Developer.xcconfig.example` to
-`Configuration/Developer.xcconfig`, replace `YOUR_TEAM_ID` with your Apple
-Development Team ID, and select an appropriate signing certificate in Xcode.
-The local configuration is ignored by Git and applies to the app and test
-targets.
-
-Before distributing your own build, replace the placeholder bundle identifier
-`de.example.Varan`. Do not commit personal signing settings to the project.
-
-Binary distribution and App Store uploads are intentionally performed locally
-through Xcode. This repository does not include GitHub build or release
-automation.
-
-## Development and testing
-
-Run the shared test target on macOS:
-
-```bash
-xcodebuild \
-  -project Varan.xcodeproj \
-  -scheme Varan \
-  -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
-  test
-```
-
-Build the iOS Simulator target without code signing:
-
-```bash
-xcodebuild \
-  -project Varan.xcodeproj \
-  -scheme Varan \
-  -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGNING_ALLOWED=NO \
-  build
-```
-
-The test suite covers URL validation, authentication, request construction,
-response decoding, error handling, and secure credential storage.
-
-To regenerate the app icon variants with macOS system frameworks, run:
-
-```bash
-xcrun swift Scripts/generate-app-icon.swift
-```
-
-## Localization
-
-Varan follows the system language. English and German are maintained in
-`Varan/Resources/Localizable.xcstrings`, with English as the fallback language.
-System permission descriptions live separately in
-`Varan/Resources/{en,de}.lproj/InfoPlist.strings`.
-
-Every new user-facing string should be added to the string catalog in both
-languages.
+See [BUILD.md](BUILD.md) for local setup, signing, build, and test instructions.
 
 ## Project status
 
-The core workflow for connecting to Komodo, browsing resources, viewing
-metrics and logs, controlling workloads, and editing supported settings is
-implemented. The repository remains a development preview intended for
-evaluation; interfaces may change before the first public release.
+The core workflow for connecting to Komodo, browsing and managing resources,
+receiving live updates, viewing metrics and logs, controlling workloads, and
+configuring app-wide behavior is implemented. Varan remains a development
+preview intended for evaluation, and interfaces may change before the first
+public release.
 
 ## Contributing
 
-Bug reports and focused pull requests are welcome. For substantial changes,
-please open an issue before implementation so the scope and product direction
-can be agreed first.
-
-Keep contributions compatible with iOS, iPadOS, and macOS, add user-facing
-strings in English and German, and run the relevant local XCTest target before
-submitting code changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
-feature-branch and versioning workflow.
+Bug reports and focused pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the branch, versioning, testing, and pull
+request workflow.
 
 ## Support
 

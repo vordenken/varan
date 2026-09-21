@@ -17,9 +17,21 @@ enum ResourceSection: String, CaseIterable, Identifiable {
 }
 
 struct ResourceBrowserView: View {
+  @Environment(\.scenePhase) private var scenePhase
   let profile: ServerProfile
   let keychainStore: KeychainStore
-  @State private var section = ResourceSection.stacks
+  @ObservedObject var appSettings: AppSettings
+  @State private var section: ResourceSection
+  @StateObject private var liveUpdates = KomodoLiveUpdateController()
+
+  init(profile: ServerProfile, keychainStore: KeychainStore, appSettings: AppSettings) {
+    self.profile = profile
+    self.keychainStore = keychainStore
+    self.appSettings = appSettings
+    _section = State(
+      initialValue: ResourceSection(rawValue: appSettings.defaultResourceSection.rawValue) ?? .stacks
+    )
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -28,18 +40,126 @@ struct ResourceBrowserView: View {
       }
       .pickerStyle(.segmented)
       .padding()
+      LiveConnectionStatusView(
+        status: liveUpdates.status
+      )
+      .padding(.horizontal)
+      .padding(.bottom, 8)
       Divider()
 
       Group {
         switch section {
-        case .servers: ServerListView(profile: profile, keychainStore: keychainStore)
-        case .stacks: StackListView(profile: profile, keychainStore: keychainStore)
-        case .containers: ContainerListView(profile: profile, keychainStore: keychainStore)
+        case .servers:
+          ServerListView(
+            profile: profile,
+            keychainStore: keychainStore,
+            appSettings: appSettings
+          )
+        case .stacks:
+          StackListView(
+            profile: profile,
+            keychainStore: keychainStore,
+            appSettings: appSettings
+          )
+        case .containers:
+          ContainerListView(
+            profile: profile,
+            keychainStore: keychainStore,
+            appSettings: appSettings
+          )
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .environmentObject(liveUpdates)
+    .task(id: profile.id) {
+      guard scenePhase == .active else { return }
+      await connectLiveUpdates()
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      guard appSettings.liveUpdatesEnabled else {
+        liveUpdates.stop()
+        return
+      }
+      if newPhase == .active {
+        Task { await connectLiveUpdates() }
+      } else {
+        liveUpdates.stop()
+      }
+    }
+    .onChange(of: appSettings.liveUpdatesEnabled) { _, enabled in
+      if enabled, scenePhase == .active {
+        Task { await connectLiveUpdates() }
+      } else {
+        liveUpdates.stop()
+      }
+    }
+    .onDisappear { liveUpdates.stop() }
+  }
+
+  @MainActor
+  private func connectLiveUpdates() async {
+    guard appSettings.liveUpdatesEnabled else {
+      liveUpdates.stop()
+      return
+    }
+    do {
+      guard let credentials = try await keychainStore.credentials(
+        for: profile.credentialAccount
+      ), credentials.authenticationKind == profile.authenticationKind else {
+        throw KeychainStoreError.invalidCredentialData
+      }
+      liveUpdates.start(
+        address: try profile.address,
+        authentication: credentials.authentication
+      )
+    } catch {
+      liveUpdates.stop()
+    }
+  }
+}
+
+struct LiveConnectionStatusView: View {
+  let status: LiveConnectionStatus
+
+  var body: some View {
+    HStack(spacing: 7) {
+      Image(systemName: symbol)
+        .foregroundStyle(color)
+        .accessibilityHidden(true)
+      Text(title)
+        .font(.caption.weight(.medium))
+      if status == .connecting {
+        ProgressView().controlSize(.mini)
+      }
+      Spacer()
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var title: LocalizedStringKey {
+    switch status {
+    case .connecting: "status.connecting"
+    case .live: "status.live"
+    case .offline: "status.offline"
+    }
+  }
+
+  private var symbol: String {
+    switch status {
+    case .connecting: "network"
+    case .live: "bolt.horizontal.circle.fill"
+    case .offline: "wifi.slash"
+    }
+  }
+
+  private var color: Color {
+    switch status {
+    case .connecting: .orange
+    case .live: .green
+    case .offline: .secondary
+    }
   }
 }
 
@@ -55,8 +175,10 @@ func makeKomodoClient(profile: ServerProfile, keychainStore: KeychainStore) asyn
 }
 
 struct ServerListView: View {
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
   @State private var servers: [ServerListItem] = []
   @State private var searchText = ""
   @State private var errorMessage: String?
@@ -75,11 +197,17 @@ struct ServerListView: View {
       } else {
         List(filteredServers) { server in
           NavigationLink {
-            ServerDetailView(summary: server, profile: profile, keychainStore: keychainStore)
+            ServerDetailView(
+              summary: server,
+              profile: profile,
+              keychainStore: keychainStore,
+              appSettings: appSettings
+            )
+              .environmentObject(liveUpdates)
           } label: {
             HStack {
-              Image(systemName: server.info.state.lowercased() == "ok" ? "checkmark.circle.fill" : "server.rack")
-                .foregroundStyle(server.info.state.lowercased() == "ok" ? .green : .secondary)
+              Image(systemName: server.info.state == .ok ? "checkmark.circle.fill" : "server.rack")
+                .foregroundStyle(server.info.state == .ok ? .green : .secondary)
               VStack(alignment: .leading) {
                 Text(server.name).font(.headline)
                 Text([server.info.region, server.info.address ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -87,7 +215,10 @@ struct ServerListView: View {
               }
               Spacer()
               if let stats = server.info.stats {
-                Text(stats.cpuPercent, format: .number.precision(.fractionLength(0)).rounded(rule: .up).scale(1).notation(.automatic))
+                Text(String(
+                  format: String(localized: "metrics.cpuCompact"),
+                  stats.cpuPercent
+                ))
                   .font(.caption.monospacedDigit())
                   .accessibilityLabel("field.cpu")
               }
@@ -101,7 +232,7 @@ struct ServerListView: View {
     .navigationTitle("title.servers")
     .searchable(text: $searchText, prompt: "action.searchServers")
     .toolbar {
-      ToolbarItemGroup {
+      ToolbarItemGroup(placement: .primaryAction) {
         Button("action.addServer", systemImage: "plus") { showingCreate = true }
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
           .disabled(isLoading)
@@ -116,6 +247,12 @@ struct ServerListView: View {
       }
     }
     .task(id: profile.id) { await load() }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.server) { Task { await load() } }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await load() }
+    }
   }
 
   private var filteredServers: [ServerListItem] {
@@ -136,17 +273,25 @@ struct ServerListView: View {
 }
 
 struct ServerDetailView: View {
+  @Environment(\.scenePhase) private var scenePhase
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let summary: ServerListItem
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
   @State private var server: ServerDetail?
+  @State private var serverState: KomodoServerState?
   @State private var stats: SystemStats?
   @State private var history: [SystemStatsRecord] = []
   @State private var containers: [ContainerListItem] = []
   @State private var stacks: [StackListItem] = []
   @State private var errorMessage: String?
-  @State private var isLoading = true
-  @State private var autoRefresh = true
+  @State private var historyErrorMessage: String?
+  @State private var isLoadingDetails = true
+  @State private var isLoadingMetrics = true
+  @State private var isLoadingStacks = true
+  @State private var isLoadingContainers = true
+  @State private var isLoadingHistory = true
   @State private var showingEditor = false
   @State private var granularity = "15-min"
 
@@ -154,8 +299,8 @@ struct ServerDetailView: View {
     List {
       if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
       Section("section.overview") {
-        LabeledContent("field.status", value: server?.info.state ?? summary.info.state)
-        if let version = server?.info.version { LabeledContent("field.version", value: version) }
+        LabeledContent("field.status", value: localizedServerState(serverState ?? summary.info.state))
+        if let version = summary.info.version { LabeledContent("field.version", value: version) }
         if let config = server?.config {
           LabeledContent("field.address", value: config.address)
           if !config.region.isEmpty { LabeledContent("field.region", value: config.region) }
@@ -176,17 +321,27 @@ struct ServerDetailView: View {
             MetricRow(title: LocalizedStringKey(disk.mount), value: disk.usedGB, total: disk.totalGB, unit: "GB")
           }
         }
-      } else if !isLoading {
+      } else if !isLoadingMetrics {
         Section("section.currentMetrics") { Text("message.metricsUnavailable").foregroundStyle(.secondary) }
+      } else {
+        Section("section.currentMetrics") { CenteredLoadingRow("status.loadingMetrics") }
       }
-      if !history.isEmpty {
-        Section("section.history") {
-          Picker("field.granularity", selection: $granularity) {
-            Text("metrics.fifteenMinutes").tag("15-min")
-            Text("metrics.oneHour").tag("1-hour")
-            Text("metrics.oneDay").tag("1-day")
-          }
-          .pickerStyle(.segmented)
+      Section("section.history") {
+        Picker("field.granularity", selection: $granularity) {
+          Text("metrics.fifteenMinutes").tag("15-min")
+          Text("metrics.oneHour").tag("1-hr")
+          Text("metrics.oneDay").tag("1-day")
+        }
+        .pickerStyle(.segmented)
+
+        if isLoadingHistory, history.isEmpty {
+          CenteredLoadingRow("status.loadingHistory")
+        } else if history.isEmpty {
+          Text(historyErrorMessage ?? String(localized: "message.historyUnavailable"))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
+        } else {
           Chart(history) { point in
             LineMark(x: .value("Time", measurementDate(point.timestamp)),
                      y: .value("CPU", point.cpuPercent))
@@ -194,21 +349,51 @@ struct ServerDetailView: View {
           }
           .chartYAxisLabel("CPU %")
           .frame(minHeight: 180)
+          if isLoadingHistory {
+            ProgressView()
+              .controlSize(.small)
+              .frame(maxWidth: .infinity, alignment: .center)
+              .accessibilityLabel("status.loadingHistory")
+          } else if let historyErrorMessage {
+            Label(historyErrorMessage, systemImage: "exclamationmark.triangle")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
         }
       }
       Section("title.stacks") {
-        if stacks.isEmpty { Text("message.noStacks").foregroundStyle(.secondary) }
+        if isLoadingStacks, stacks.isEmpty {
+          CenteredLoadingRow("status.loadingStacks")
+        } else if stacks.isEmpty {
+          Text("message.noStacks").foregroundStyle(.secondary)
+        }
         ForEach(stacks) { stack in
           NavigationLink {
-            StackDetailView(summary: stack, profile: profile, keychainStore: keychainStore)
+            StackDetailView(
+              summary: stack,
+              profile: profile,
+              keychainStore: keychainStore,
+              appSettings: appSettings
+            )
+              .environmentObject(liveUpdates)
           } label: { Text(stack.name) }
         }
       }
       Section("title.containers") {
-        if containers.isEmpty { Text("message.noContainers").foregroundStyle(.secondary) }
+        if isLoadingContainers, containers.isEmpty {
+          CenteredLoadingRow("status.loadingContainers")
+        } else if containers.isEmpty {
+          Text("message.noContainers").foregroundStyle(.secondary)
+        }
         ForEach(containers) { container in
           NavigationLink {
-            ContainerDetailView(container: container, profile: profile, keychainStore: keychainStore)
+            ContainerDetailView(
+              container: container,
+              profile: profile,
+              keychainStore: keychainStore,
+              appSettings: appSettings
+            )
+              .environmentObject(liveUpdates)
           } label: { ContainerRow(container: container) }
         }
       }
@@ -217,9 +402,6 @@ struct ServerDetailView: View {
     .toolbar {
       ToolbarItemGroup {
         Button("action.edit", systemImage: "pencil") { showingEditor = true }.disabled(server == nil)
-        Menu("metrics.refreshSettings", systemImage: "timer") {
-          Toggle("metrics.autoRefresh", isOn: $autoRefresh)
-        }
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }.disabled(isLoading)
       }
     }
@@ -235,44 +417,144 @@ struct ServerDetailView: View {
     }
     .task(id: summary.id) { await load() }
     .task(id: granularity) { await loadHistory() }
-    .task(id: autoRefresh) {
-      while autoRefresh, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(15))
+    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
+      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
         guard !Task.isCancelled else { return }
         await load(showProgress: false)
       }
     }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.server, id: summary.id) { Task { await load(showProgress: false) } }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await load(showProgress: false) }
+    }
   }
 
   @MainActor private func load(showProgress: Bool = true) async {
-    if showProgress { isLoading = true }
-    defer { isLoading = false }
     do {
       let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-      async let loadedServer = client.getServer(idOrName: summary.id)
-      async let loadedStats = client.getSystemStats(server: summary.id)
-      async let loadedHistory = client.getHistoricalServerStats(server: summary.id)
-      async let loadedContainers = client.listContainers(server: summary.id)
-      async let loadedStacks = client.listStacks()
-      server = try await loadedServer
-      stats = try? await loadedStats
-      history = (try? await loadedHistory.stats) ?? []
-      containers = (try? await loadedContainers) ?? []
-      let allStacks = (try? await loadedStacks) ?? []
-      stacks = allStacks.filter { $0.info.serverName == summary.name }
-      errorMessage = nil
+      if showProgress {
+        isLoadingDetails = true
+        isLoadingMetrics = true
+        isLoadingStacks = true
+        isLoadingContainers = true
+      }
+      async let details: Void = loadDetails(using: client)
+      async let metrics: Void = loadMetrics(using: client)
+      async let relatedStacks: Void = loadStacks(using: client)
+      async let relatedContainers: Void = loadContainers(using: client)
+      async let historyResult: Void = loadHistory(using: client, showProgress: showProgress)
+      _ = await (details, metrics, relatedStacks, relatedContainers, historyResult)
     } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+  }
+
+  @MainActor private func loadDetails(using client: KomodoAPIClient) async {
+    defer { isLoadingDetails = false }
+    do {
+      async let loadedServer = client.getServer(idOrName: summary.id)
+      async let loadedState = client.getServerState(idOrName: summary.id)
+      server = try await loadedServer
+      serverState = (try? await loadedState.status) ?? summary.info.state
+      errorMessage = nil
+    } catch is CancellationError {} catch {
+      errorMessage = error.localizedDescription
+      serverState = summary.info.state
+    }
+  }
+
+  @MainActor private func loadMetrics(using client: KomodoAPIClient) async {
+    defer { isLoadingMetrics = false }
+    stats = try? await client.getSystemStats(server: summary.id)
+  }
+
+  @MainActor private func loadStacks(using client: KomodoAPIClient) async {
+    defer { isLoadingStacks = false }
+    let allStacks = (try? await client.listStacks()) ?? []
+    stacks = allStacks.filter { $0.info.serverName == summary.name }
+  }
+
+  @MainActor private func loadContainers(using client: KomodoAPIClient) async {
+    defer { isLoadingContainers = false }
+    containers = (try? await client.listContainers(server: summary.id)) ?? []
+  }
+
+  @MainActor private func loadHistory(
+    using client: KomodoAPIClient,
+    showProgress: Bool = true
+  ) async {
+    let requestedGranularity = granularity
+    if showProgress { isLoadingHistory = true }
+    defer {
+      if requestedGranularity == granularity {
+        isLoadingHistory = false
+      }
+    }
+    do {
+      let response = try await client.getHistoricalServerStats(
+        server: summary.id,
+        granularity: requestedGranularity
+      )
+      guard requestedGranularity == granularity else { return }
+      history = response.stats
+      historyErrorMessage = nil
+    } catch is CancellationError {
+      return
+    } catch {
+      guard requestedGranularity == granularity else { return }
+      historyErrorMessage = error.localizedDescription
+    }
   }
 
   @MainActor private func loadHistory() async {
     do {
       let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-      history = try await client.getHistoricalServerStats(server: summary.id, granularity: granularity).stats
-    } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+      await loadHistory(using: client)
+    } catch is CancellationError {} catch {
+      isLoadingHistory = false
+      historyErrorMessage = error.localizedDescription
+    }
   }
 
   private func measurementDate(_ timestamp: Int64) -> Date {
     Date(timeIntervalSince1970: TimeInterval(timestamp) / (timestamp > 10_000_000_000 ? 1_000 : 1))
+  }
+
+  private var isLoading: Bool {
+    isLoadingDetails || isLoadingMetrics || isLoadingStacks || isLoadingContainers
+  }
+
+  private func localizedServerState(_ state: KomodoServerState) -> String {
+    switch state {
+    case .ok: String(localized: "serverState.ok")
+    case .notOk: String(localized: "serverState.notOk")
+    case .disabled: String(localized: "serverState.disabled")
+    case .unknown: String(localized: "serverState.unavailable")
+    }
+  }
+}
+
+struct CenteredLoadingRow: View {
+  private let title: LocalizedStringKey
+
+  init(_ title: LocalizedStringKey) {
+    self.title = title
+  }
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Spacer(minLength: 0)
+      ProgressView()
+        .controlSize(.small)
+      Text(title)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 8)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -294,8 +576,10 @@ struct MetricRow: View {
 }
 
 struct ContainerListView: View {
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
   @State private var containers: [ContainerListItem] = []
   @State private var searchText = ""
   @State private var errorMessage: String?
@@ -309,7 +593,13 @@ struct ContainerListView: View {
       } else {
         List(filteredContainers) { container in
           NavigationLink {
-            ContainerDetailView(container: container, profile: profile, keychainStore: keychainStore)
+            ContainerDetailView(
+              container: container,
+              profile: profile,
+              keychainStore: keychainStore,
+              appSettings: appSettings
+            )
+              .environmentObject(liveUpdates)
           } label: { ContainerRow(container: container) }
         }
         .refreshable { await load() }
@@ -318,8 +608,21 @@ struct ContainerListView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .navigationTitle("title.containers")
     .searchable(text: $searchText, prompt: "action.searchContainers")
-    .toolbar { Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }.disabled(isLoading) }
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
+          .disabled(isLoading)
+      }
+    }
     .task(id: profile.id) { await load() }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.stack) || event.affects(.server) || event.affects(.deployment) {
+        Task { await load() }
+      }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await load() }
+    }
   }
 
   private var filteredContainers: [ContainerListItem] {
@@ -358,24 +661,28 @@ struct ContainerRow: View {
 }
 
 struct ContainerDetailView: View {
+  @Environment(\.scenePhase) private var scenePhase
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let container: ContainerListItem
   let profile: ServerProfile
   let keychainStore: KeychainStore
+  @ObservedObject var appSettings: AppSettings
   var ownerStack: StackDetail? = nil
   @State private var log: KomodoLog?
   @State private var errorMessage: String?
   @State private var isLoadingLog = false
   @State private var showingStackEditor = false
+  @State private var updatedContainer: ContainerListItem?
 
   var body: some View {
     List {
       Section("section.overview") {
-        LabeledContent("field.status", value: container.status ?? container.state)
-        if let image = container.image { LabeledContent("field.image", value: image) }
-        if let server = container.serverName { LabeledContent("field.server", value: server) }
-        if let mode = container.networkMode { LabeledContent("field.networkMode", value: mode) }
+        LabeledContent("field.status", value: displayedContainer.status ?? displayedContainer.state)
+        if let image = displayedContainer.image { LabeledContent("field.image", value: image) }
+        if let server = displayedContainer.serverName { LabeledContent("field.server", value: server) }
+        if let mode = displayedContainer.networkMode { LabeledContent("field.networkMode", value: mode) }
       }
-      if let stats = container.stats {
+      if let stats = displayedContainer.stats {
         Section("section.currentMetrics") {
           LabeledContent("field.cpu") {
             Text(String(
@@ -396,28 +703,34 @@ struct ContainerDetailView: View {
           LabeledContent("field.processes", value: String(stats.processCount))
         }
       }
-      if !container.ports.isEmpty {
+      if !displayedContainer.ports.isEmpty {
         Section("section.ports") {
-          ForEach(Array(container.ports.enumerated()), id: \.offset) { _, port in
+          ForEach(Array(displayedContainer.ports.enumerated()), id: \.offset) { _, port in
             LabeledContent("\(port.type.uppercased()) \(port.privatePort)", value: port.publicPort.map(String.init) ?? "—")
           }
         }
       }
-      if !container.networks.isEmpty { Section("section.networks") { ForEach(container.networks, id: \.self, content: Text.init) } }
-      if !container.volumes.isEmpty { Section("section.volumes") { ForEach(container.volumes, id: \.self, content: Text.init) } }
+      if !displayedContainer.networks.isEmpty { Section("section.networks") { ForEach(displayedContainer.networks, id: \.self, content: Text.init) } }
+      if !displayedContainer.volumes.isEmpty { Section("section.volumes") { ForEach(displayedContainer.volumes, id: \.self, content: Text.init) } }
       Section("section.logs") {
-        if isLoadingLog { ProgressView("status.loadingLogs") }
+        if isLoadingLog { CenteredLoadingRow("status.loadingLogs") }
         else if let log { Text(log.combinedOutput).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
         else { Text(errorMessage ?? String(localized: "label.noLogOutput")).foregroundStyle(.secondary) }
       }
     }
-    .navigationTitle(container.name)
+    .navigationTitle(displayedContainer.name)
     .toolbar {
       ToolbarItemGroup {
         if ownerStack != nil {
           Button("action.editContainerConfiguration", systemImage: "pencil") { showingStackEditor = true }
         }
-        Button("action.refresh", systemImage: "arrow.clockwise") { Task { await loadLog() } }
+        Button("action.refresh", systemImage: "arrow.clockwise") {
+          Task {
+            async let logResult: Void = loadLog()
+            async let metricsResult: Void = loadMetrics()
+            _ = await (logResult, metricsResult)
+          }
+        }
       }
     }
     .sheet(isPresented: $showingStackEditor) {
@@ -430,6 +743,26 @@ struct ContainerDetailView: View {
       }
     }
     .task { await loadLog() }
+    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
+      await loadMetrics()
+      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
+        guard !Task.isCancelled else { break }
+        await loadMetrics()
+      }
+    }
+    .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
+      if event.affects(.stack) || event.affects(.server) || event.affects(.deployment) {
+        Task { await loadMetrics() }
+      }
+    }
+    .onChange(of: liveUpdates.refreshGeneration) { _, _ in
+      Task { await loadMetrics() }
+    }
+  }
+
+  private var displayedContainer: ContainerListItem {
+    updatedContainer ?? container
   }
 
   @MainActor private func loadLog() async {
@@ -441,6 +774,19 @@ struct ContainerDetailView: View {
         .getContainerLog(server: server, container: container.name)
       errorMessage = nil
     } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+  }
+
+  @MainActor private func loadMetrics() async {
+    do {
+      let containers = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+        .listAllContainers()
+      updatedContainer = containers.first {
+        $0.id == container.id
+          || ($0.name == container.name && $0.serverID == container.serverID)
+      }
+    } catch is CancellationError {} catch {
+      // Keep the most recent metrics while transient polling fails.
+    }
   }
 }
 

@@ -402,7 +402,8 @@ struct ServerListItem: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ServerListItemInfo: Decodable, Equatable, Sendable {
-  let state: String
+  let state: KomodoServerState
+  let version: String?
   let error: String?
   let stats: MinimalSystemStats?
   let region: String
@@ -411,6 +412,7 @@ struct ServerListItemInfo: Decodable, Equatable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case state
+    case version
     case error = "err"
     case stats
     case region
@@ -420,13 +422,35 @@ struct ServerListItemInfo: Decodable, Equatable, Sendable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    state = try container.decodeIfPresent(String.self, forKey: .state) ?? "unknown"
+    state = try container.decodeIfPresent(KomodoServerState.self, forKey: .state) ?? .unknown("")
+    version = try container.decodeIfPresent(String.self, forKey: .version)
     error = try container.decodeIfPresent(String.self, forKey: .error)
     stats = try container.decodeIfPresent(MinimalSystemStats.self, forKey: .stats)
     region = try container.decodeIfPresent(String.self, forKey: .region) ?? ""
     address = try container.decodeIfPresent(String.self, forKey: .address)
     externalAddress = try container.decodeIfPresent(String.self, forKey: .externalAddress)
   }
+}
+
+enum KomodoServerState: Decodable, Equatable, Sendable {
+  case ok
+  case notOk
+  case disabled
+  case unknown(String)
+
+  init(from decoder: Decoder) throws {
+    let value = try decoder.singleValueContainer().decode(String.self)
+    switch value.lowercased() {
+    case "ok": self = .ok
+    case "notok", "not_ok", "not ok": self = .notOk
+    case "disabled": self = .disabled
+    default: self = .unknown(value)
+    }
+  }
+}
+
+struct ServerStateResponse: Decodable, Equatable, Sendable {
+  let status: KomodoServerState
 }
 
 struct MinimalSystemStats: Decodable, Equatable, Sendable {
@@ -473,16 +497,24 @@ struct ServerDetail: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ServerInfo: Decodable, Equatable, Sendable {
-  let state: String
-  let version: String?
+  let attemptedPublicKey: String?
+  let publicKey: String?
 
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-    state = try container.decodeIfPresent(String.self, forKey: .init("state")) ?? "unknown"
-    version = try container.decodeIfPresent(String.self, forKey: .init("version"))
+  private enum CodingKeys: String, CodingKey {
+    case attemptedPublicKey = "attempted_public_key"
+    case publicKey = "public_key"
   }
 
-  init() { state = "unknown"; version = nil }
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    attemptedPublicKey = try container.decodeIfPresent(String.self, forKey: .attemptedPublicKey)
+    publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
+  }
+
+  init() {
+    attemptedPublicKey = nil
+    publicKey = nil
+  }
 }
 
 struct ServerConfig: Decodable, Equatable, Sendable {

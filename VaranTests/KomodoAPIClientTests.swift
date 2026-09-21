@@ -571,7 +571,7 @@ final class KomodoAPIClientTests: XCTestCase {
         XCTAssertEqual(json["type"] as? String, "ListServers")
         return Self.response(for: request, statusCode: 200, body: """
           [{"id":"server-1","name":"Docker","template":false,"tags":["home"],
-            "info":{"state":"Ok","region":"office","address":"https://agent.local",
+            "info":{"state":"Ok","version":"1.19.0","region":"office","address":"https://agent.local",
               "stats":{"cpu_perc":12.5,"mem_used_gb":2.0,"mem_total_gb":8.0}}}]
           """)
       }
@@ -589,6 +589,8 @@ final class KomodoAPIClientTests: XCTestCase {
     let stats = try await client.getSystemStats(server: "server-1")
 
     XCTAssertEqual(servers.first?.info.stats?.memoryTotalGB, 8)
+    XCTAssertEqual(servers.first?.info.state, .ok)
+    XCTAssertEqual(servers.first?.info.version, "1.19.0")
     XCTAssertEqual(stats.loadAverage.five, 0.2)
     XCTAssertEqual(stats.networkEgressBytes, 200)
   }
@@ -608,13 +610,13 @@ final class KomodoAPIClientTests: XCTestCase {
         XCTAssertEqual(params["server"] as? String, "server-1")
         return Self.response(for: request, statusCode: 200, body: """
           {"_id":"server-1","name":"Docker","description":"Primary","tags":["home"],
-           "info":{"state":"Ok","version":"1.19.0"},
+           "info":{"attempted_public_key":"old-key","public_key":"current-key"},
            "config":{"address":"https://agent.local","region":"office","enabled":true}}
           """)
       case 2:
         XCTAssertEqual(json["type"] as? String, "GetHistoricalServerStats")
         XCTAssertEqual(params["server"] as? String, "server-1")
-        XCTAssertEqual(params["granularity"] as? String, "1-hour")
+        XCTAssertEqual(params["granularity"] as? String, "1-hr")
         XCTAssertEqual(params["page"] as? Int, 2)
         return Self.response(for: request, statusCode: 200, body: """
           {"stats":[{"ts":123,"cpu_perc":20,"mem_used_gb":2,"mem_total_gb":8}],
@@ -634,15 +636,36 @@ final class KomodoAPIClientTests: XCTestCase {
     let server = try await client.getServer(idOrName: "server-1")
     let history = try await client.getHistoricalServerStats(
       server: "server-1",
-      granularity: "1-hour",
+      granularity: "1-hr",
       page: 2
     )
     let containers = try await client.listContainers(server: "server-1")
 
-    XCTAssertEqual(server.info.version, "1.19.0")
+    XCTAssertEqual(server.info.attemptedPublicKey, "old-key")
+    XCTAssertEqual(server.info.publicKey, "current-key")
     XCTAssertEqual(history.stats.first?.cpuPercent, 20)
     XCTAssertEqual(history.nextPage, 3)
     XCTAssertEqual(containers.first?.name, "web")
+  }
+
+  func testGetServerStateUsesReadContractAndDecodesKnownAndFutureStates() async throws {
+    var responseBody = #"{"status":"NotOk"}"#
+    MockURLProtocol.handler = { request in
+      let json = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      XCTAssertEqual(json["type"] as? String, "GetServerState")
+      XCTAssertEqual((json["params"] as? [String: Any])?["server"] as? String, "server-1")
+      return Self.response(for: request, statusCode: 200, body: responseBody)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    let unavailable = try await client.getServerState(idOrName: "server-1")
+    XCTAssertEqual(unavailable.status, .notOk)
+
+    responseBody = #"{"status":"Maintenance"}"#
+    let futureState = try await client.getServerState(idOrName: "server-1")
+    XCTAssertEqual(futureState.status, .unknown("Maintenance"))
   }
 
   func testCreateServerSendsTypedConfigurationToWriteEndpoint() async throws {
