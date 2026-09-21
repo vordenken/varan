@@ -32,8 +32,9 @@ brand assets, or source code.
   affected views automatically, and reconnect after interruptions.
 - **Metrics and history:** monitor current resource usage and explore historical
   server data across multiple time ranges.
-- **Logs and workload controls:** search and follow container logs, then start or
-  stop supported workloads with clear confirmation.
+- **Logs and workload controls:** search and follow stack or container logs,
+  then deploy, update, pause, restart, stop, or remove supported workloads from
+  state-aware native menus with clear confirmation.
 - **Safe configuration editing:** create and edit supported server and stack
   settings using typed, partial updates while preserving Komodo's API semantics.
 - **Secure connections:** authenticate with an API key or JWT. Credentials stay
@@ -47,14 +48,24 @@ brand assets, or source code.
 ## Native on iPhone, iPad, and Mac
 
 <p align="center">
-  <img src="Docs/Screenshots/ios-server-detail.png" alt="Inspect server metrics and related resources in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Inspect services and aggregate stack metrics in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-container-detail.png" alt="Inspect container resource usage and configuration in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-server-detail.png" alt="Server details with live connection state, refresh, and management actions in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Stack services and metrics with state-aware toolbar actions in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-container-detail.png" alt="Container metrics with live connection state and runtime actions in Varan" width="30%">
 </p>
+
+<p align="center">
+  <sub><strong>Server details</strong> · <strong>Stack services and metrics</strong> · <strong>Container details</strong></sub>
+</p>
+
+<p align="center"><sub>Captured from the real iOS app in Simulator with deterministic demo data.</sub></p>
 
 The shared app uses a compact tab-based experience on iPhone and iPad and a
 native sidebar on Mac. App settings and Komodo instance management remain in a
-single predictable place on every platform.
+single predictable place on every platform. Resource details keep connection
+state and refresh controls in the toolbar. Stack and container operations live
+in a native, state-aware Actions menu, leaving the content and tab bar
+unobscured. Stack-wide, service, and container logs open in the same dedicated,
+searchable viewer.
 
 ## Connection and update behavior
 

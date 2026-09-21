@@ -24,6 +24,19 @@ struct VaranApp: App {
 
   @ViewBuilder
   private var startupContent: some View {
+#if DEBUG && os(iOS)
+    if ScreenshotDemo.enabled {
+      ScreenshotDemoRootView()
+    } else {
+      regularStartupContent
+    }
+#else
+    regularStartupContent
+#endif
+  }
+
+  @ViewBuilder
+  private var regularStartupContent: some View {
     switch startupState {
     case .loading:
       StartupView()

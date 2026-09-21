@@ -1,6 +1,54 @@
 import SwiftUI
 
+private enum StackResourceAction: String, Identifiable {
+  case deploy
+  case pull
+  case start
+  case restart
+  case pause
+  case resume
+  case stop
+  case destroy
+  case deleteDefinition
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .deploy: String(localized: "action.deploy")
+    case .pull: String(localized: "action.pullImages")
+    case .start: String(localized: "action.start")
+    case .restart: String(localized: "action.restart")
+    case .pause: String(localized: "action.pause")
+    case .resume: String(localized: "action.resume")
+    case .stop: String(localized: "action.stop")
+    case .destroy: String(localized: "action.destroy")
+    case .deleteDefinition: String(localized: "action.deleteStack")
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .deploy: "paperplane.fill"
+    case .pull: "arrow.down.circle"
+    case .start: "play.fill"
+    case .restart: "arrow.clockwise"
+    case .pause: "pause.fill"
+    case .resume: "play.fill"
+    case .stop: "stop.fill"
+    case .destroy, .deleteDefinition: "trash"
+    }
+  }
+
+  var isDestructive: Bool {
+    self == .stop || self == .destroy || self == .deleteDefinition
+  }
+
+  var isRemoval: Bool { self == .destroy || self == .deleteDefinition }
+}
+
 struct StackDetailView: View {
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   private enum LoadState: Equatable {
@@ -33,6 +81,8 @@ struct StackDetailView: View {
   @State private var stopTarget: StopTarget?
   @State private var actionError: String?
   @State private var showingEditor = false
+  @State private var pendingAction: StackResourceAction?
+  @State private var logDestination: LogSource?
 
   var body: some View {
     Group {
@@ -53,35 +103,27 @@ struct StackDetailView: View {
         content
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .navigationTitle(detail?.name ?? summary.name)
     .toolbar {
       ToolbarItemGroup {
-        Button("action.edit", systemImage: "pencil") {
-          showingEditor = true
-        }
-        .disabled(detail == nil || isBusy)
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refresh", systemImage: "arrow.clockwise") {
           Task { await loadContent() }
         }
         .disabled(isBusy)
-
-        Menu(
-          stackIsRunning ? "status.stackRunning" : "title.stackActions",
-          systemImage: stackIsRunning ? "checkmark.circle.fill" : "ellipsis.circle"
-        ) {
-          if stackIsRunning {
-            Button("status.stackRunning", systemImage: "checkmark.circle.fill") {}
-              .disabled(true)
-          } else {
-            Button("action.startStack", systemImage: "play.fill") {
-              Task { await runStackAction(start: true) }
-            }
-          }
-          Button("action.stopStack", systemImage: "stop.fill", role: .destructive) {
-            stopTarget = .stack
-          }
-        }
-        .disabled(isBusy)
+        StackActionMenu(
+          state: effectiveState,
+          updateAvailable: updateAvailable,
+          isEnabled: detail != nil,
+          activeAction: activeStackAction,
+          edit: { showingEditor = true },
+          perform: handleStackAction
+        )
       }
     }
     .refreshable {
@@ -118,6 +160,19 @@ struct StackDetailView: View {
     } message: { target in
       Text(stopMessage(for: target))
     }
+    .confirmationDialog(
+      pendingActionTitle,
+      isPresented: confirmsStackAction,
+      titleVisibility: .visible,
+      presenting: pendingAction
+    ) { action in
+      Button(action.title, role: action.isDestructive ? .destructive : nil) {
+        Task { await runStackAction(action) }
+      }
+      Button("action.cancel", role: .cancel) {}
+    } message: { action in
+      Text(confirmationMessage(for: action))
+    }
     .alert("alert.actionFailed", isPresented: showsActionError) {
       Button("action.ok") { actionError = nil }
     } message: {
@@ -136,6 +191,15 @@ struct StackDetailView: View {
           }
         }
       }
+    }
+    .navigationDestination(item: $logDestination) { source in
+      LogViewerView(
+        profile: profile,
+        keychainStore: keychainStore,
+        source: source,
+        appSettings: appSettings
+      )
+      .environmentObject(liveUpdates)
     }
   }
 
@@ -171,13 +235,13 @@ struct StackDetailView: View {
                 )
                 .environmentObject(liveUpdates)
               } else {
-                StackLogView(
+                LogViewerView(
                   profile: profile,
                   keychainStore: keychainStore,
-                  stackID: summary.id,
-                  service: service,
+                  source: logSource(for: service),
                   appSettings: appSettings
                 )
+                .environmentObject(liveUpdates)
               }
             } label: {
               StackServiceRow(
@@ -202,6 +266,9 @@ struct StackDetailView: View {
               .disabled(isBusy)
             }
             .contextMenu {
+              Button("action.openLogs", systemImage: "doc.text.magnifyingglass") {
+                logDestination = logSource(for: service)
+              }
               Button("action.start", systemImage: "play.fill") {
                 Task { await runServiceAction(service, start: true) }
               }
@@ -215,6 +282,20 @@ struct StackDetailView: View {
         if case .failed(let message) = loadState {
           Label(message, systemImage: "exclamationmark.triangle")
             .foregroundStyle(.red)
+        }
+      }
+
+      Section("section.observability") {
+        NavigationLink {
+          LogViewerView(
+            profile: profile,
+            keychainStore: keychainStore,
+            source: allStackLogsSource,
+            appSettings: appSettings
+          )
+          .environmentObject(liveUpdates)
+        } label: {
+          Label("action.openStackLogs", systemImage: "doc.text.magnifyingglass")
         }
       }
 
@@ -257,8 +338,15 @@ struct StackDetailView: View {
     loadState == .loading || activeActionID != nil
   }
 
-  private var stackIsRunning: Bool {
-    effectiveState == "running"
+  private var activeStackAction: StackResourceAction? {
+    guard activeActionID == summary.id else { return nil }
+    return currentAction
+  }
+
+  @State private var currentAction: StackResourceAction?
+
+  private var updateAvailable: Bool {
+    summary.info.services.contains(where: \.updateAvailable)
   }
 
   private var hostName: String {
@@ -271,7 +359,10 @@ struct StackDetailView: View {
     if states == ["running"] || states == ["healthy"] {
       return "running"
     }
-    if states.isSubset(of: ["stopped", "exited", "paused", "created", "down"]) {
+    if states == ["paused"] {
+      return "paused"
+    }
+    if states.isSubset(of: ["stopped", "exited", "created", "down"]) {
       return "stopped"
     }
     if states.contains("unhealthy") || states.contains("dead") {
@@ -316,6 +407,59 @@ struct StackDetailView: View {
     )
   }
 
+  private var confirmsStackAction: Binding<Bool> {
+    Binding(
+      get: { pendingAction != nil },
+      set: { if !$0 { pendingAction = nil } }
+    )
+  }
+
+  private var pendingActionTitle: String {
+    guard let pendingAction else { return String(localized: "title.stackActions") }
+    return pendingAction.title
+  }
+
+  private var allStackLogsSource: LogSource {
+    .stack(
+      id: summary.id,
+      name: detail?.name ?? summary.name,
+      services: services.map(\.service),
+      selectedServices: []
+    )
+  }
+
+  private func logSource(for service: StackService) -> LogSource {
+    .stack(
+      id: summary.id,
+      name: service.service,
+      services: services.map(\.service),
+      selectedServices: [service.service]
+    )
+  }
+
+  private func confirmationMessage(for action: StackResourceAction) -> String {
+    let name = detail?.name ?? summary.name
+    return switch action {
+    case .stop:
+      String(localized: "confirm.stopAllServices")
+    case .destroy:
+      String(format: String(localized: "confirm.destroyStack.message"), name)
+    case .deleteDefinition:
+      String(format: String(localized: "confirm.deleteStack.message"), name)
+    default:
+      String(format: String(localized: "confirm.stackAction.message"), name)
+    }
+  }
+
+  private func handleStackAction(_ action: StackResourceAction) {
+    switch action {
+    case .stop, .destroy, .deleteDefinition:
+      pendingAction = action
+    default:
+      Task { await runStackAction(action) }
+    }
+  }
+
   private func stopMessage(for target: StopTarget) -> String {
     switch target {
     case .stack:
@@ -343,15 +487,30 @@ struct StackDetailView: View {
   }
 
   @MainActor
-  private func runStackAction(start: Bool) async {
+  private func runStackAction(_ action: StackResourceAction) async {
+    pendingAction = nil
     activeActionID = summary.id
-    defer { activeActionID = nil }
+    currentAction = action
+    defer {
+      activeActionID = nil
+      currentAction = nil
+    }
     do {
       let client = try await makeClient()
-      if start {
-        _ = try await client.startStack(idOrName: summary.id)
-      } else {
-        _ = try await client.stopStack(idOrName: summary.id)
+      switch action {
+      case .deploy: _ = try await client.deployStack(idOrName: summary.id)
+      case .pull: _ = try await client.pullStackImages(idOrName: summary.id)
+      case .start: _ = try await client.startStack(idOrName: summary.id)
+      case .restart: _ = try await client.restartStack(idOrName: summary.id)
+      case .pause: _ = try await client.pauseStack(idOrName: summary.id)
+      case .resume: _ = try await client.unpauseStack(idOrName: summary.id)
+      case .stop: _ = try await client.stopStack(idOrName: summary.id)
+      case .destroy: _ = try await client.destroyStack(idOrName: summary.id)
+      case .deleteDefinition:
+        _ = try await client.deleteStack(idOrName: summary.id)
+        liveUpdates.requestRefresh()
+        dismiss()
+        return
       }
       await loadContent()
     } catch {
@@ -387,26 +546,87 @@ struct StackDetailView: View {
     stopTarget = nil
     switch target {
     case .stack:
-      await runStackAction(start: false)
+      await runStackAction(.stop)
     case .service(let service):
       await runServiceAction(service, start: false)
     }
   }
 
   private func makeClient() async throws -> KomodoAPIClient {
-    guard let credentials = try await keychainStore.credentials(
-      for: profile.credentialAccount
-    ), credentials.authenticationKind == profile.authenticationKind else {
-      throw KeychainStoreError.invalidCredentialData
-    }
-    return KomodoAPIClient(
-      address: try profile.address,
-      authentication: credentials.authentication
-    )
+    try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
   }
 
   private func localizedMessage(for error: Error) -> String {
     (error as? LocalizedError)?.errorDescription ?? String(localized: "error.stack.loadFailed")
+  }
+}
+
+private struct StackActionMenu: View {
+  let state: String
+  let updateAvailable: Bool
+  let isEnabled: Bool
+  let activeAction: StackResourceAction?
+  let edit: () -> Void
+  let perform: (StackResourceAction) -> Void
+
+  var body: some View {
+    Menu {
+      Button("action.edit", systemImage: "pencil", action: edit)
+
+      Section("section.operationActions") {
+        ForEach(actions.filter { !$0.isRemoval }) { action in
+          actionButton(action)
+        }
+      }
+
+      if actions.contains(where: \.isRemoval) {
+        Section("section.destructiveActions") {
+          ForEach(actions.filter(\.isRemoval)) { action in
+            actionButton(action)
+          }
+        }
+      }
+    } label: {
+      if let activeAction {
+        ProgressView()
+          .controlSize(.small)
+          .accessibilityLabel(activeAction.title)
+      } else {
+        Label("title.stackActions", systemImage: "ellipsis.circle")
+      }
+    }
+    .disabled(!isEnabled || activeAction != nil)
+    .accessibilityLabel(activeAction?.title ?? String(localized: "title.stackActions"))
+  }
+
+  private func actionButton(_ action: StackResourceAction) -> some View {
+    Button(role: action.isDestructive ? .destructive : nil) {
+      perform(action)
+    } label: {
+      if action == .pull, updateAvailable {
+        Label(
+          "\(action.title) · \(String(localized: "status.updateAvailable"))",
+          systemImage: action.symbol
+        )
+      } else {
+        Label(action.title, systemImage: action.symbol)
+      }
+    }
+  }
+
+  private var actions: [StackResourceAction] {
+    switch state.lowercased() {
+    case "running", "healthy":
+      [.deploy, .pull, .restart, .pause, .stop, .destroy, .deleteDefinition]
+    case "paused":
+      [.resume, .stop, .restart, .destroy, .deleteDefinition]
+    case "stopped", "exited", "created":
+      [.start, .deploy, .pull, .restart, .destroy, .deleteDefinition]
+    case "down":
+      [.deploy, .pull, .deleteDefinition]
+    default:
+      [.deploy, .pull, .deleteDefinition]
+    }
   }
 }
 
@@ -598,7 +818,42 @@ enum LogSearch {
   }
 }
 
-private struct StackLogView: View {
+enum LogSource: Hashable, Identifiable {
+  case stack(id: String, name: String, services: [String], selectedServices: [String])
+  case container(serverID: String, name: String)
+
+  var id: String {
+    switch self {
+    case .stack(let id, _, _, let selectedServices):
+      "stack-\(id)-\(selectedServices.sorted().joined(separator: ","))"
+    case .container(let serverID, let name):
+      "container-\(serverID)-\(name)"
+    }
+  }
+
+  var title: String {
+    switch self {
+    case .stack(_, let name, _, _): name
+    case .container(_, let name): name
+    }
+  }
+
+  var availableServices: [String] {
+    switch self {
+    case .stack(_, _, let services, _): services
+    case .container: []
+    }
+  }
+
+  var initialServices: Set<String> {
+    switch self {
+    case .stack(_, _, _, let selectedServices): Set(selectedServices)
+    case .container: []
+    }
+  }
+}
+
+struct LogViewerView: View {
   private enum Stream: String, CaseIterable, Identifiable {
     case combined
     case standardOutput
@@ -617,8 +872,7 @@ private struct StackLogView: View {
 
   let profile: ServerProfile
   let keychainStore: KeychainStore
-  let stackID: String
-  let service: StackService
+  let source: LogSource
   @ObservedObject var appSettings: AppSettings
 
   @State private var log: KomodoLog?
@@ -631,20 +885,21 @@ private struct StackLogView: View {
   @State private var highlightedOutput = AttributedString()
   @State private var highlightedLines: [AttributedString] = []
   @State private var logRevision = 0
+  @State private var selectedServices: Set<String>
+  @State private var tail = 200
 
   init(
     profile: ServerProfile,
     keychainStore: KeychainStore,
-    stackID: String,
-    service: StackService,
+    source: LogSource,
     appSettings: AppSettings
   ) {
     self.profile = profile
     self.keychainStore = keychainStore
-    self.stackID = stackID
-    self.service = service
+    self.source = source
     self.appSettings = appSettings
     _followsLatest = State(initialValue: appSettings.logsFollowLatest)
+    _selectedServices = State(initialValue: source.initialServices)
   }
 
   var body: some View {
@@ -670,12 +925,17 @@ private struct StackLogView: View {
         }
       }
     }
-    .navigationTitle(String(format: String(localized: "log.title"), service.service))
+    .navigationTitle(String(format: String(localized: "log.title"), source.title))
     #if os(iOS)
     .navigationBarTitleDisplayMode(.inline)
     #endif
     .toolbar {
       ToolbarItemGroup {
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
         Button("action.refreshNow", systemImage: "arrow.clockwise") {
           Task { await loadLog() }
         }
@@ -683,7 +943,7 @@ private struct StackLogView: View {
 
       }
     }
-    .task(id: "\(appSettings.logsAutoRefresh)-\(appSettings.logRefreshInterval.rawValue)") {
+    .task(id: logLoadingTaskID) {
       await loadLog()
       while appSettings.logsAutoRefresh, !Task.isCancelled {
         try? await Task.sleep(for: .seconds(appSettings.logRefreshInterval.rawValue))
@@ -704,6 +964,22 @@ private struct StackLogView: View {
 
   private var logControls: some View {
     VStack(spacing: 8) {
+      HStack {
+        if !source.availableServices.isEmpty {
+          serviceScopeMenu
+        }
+        Spacer()
+        Picker("log.tail", selection: $tail) {
+          Text(verbatim: "100").tag(100)
+          Text(verbatim: "200").tag(200)
+          Text(verbatim: "500").tag(500)
+          Text(verbatim: "1,000").tag(1_000)
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .accessibilityLabel("log.tail")
+      }
+
       Picker("log.stream", selection: $selectedStream) {
         ForEach(Stream.allCases) { stream in
           Text(stream.title).tag(stream)
@@ -716,6 +992,51 @@ private struct StackLogView: View {
     .padding(.horizontal)
     .padding(.vertical, 8)
     .background(.bar)
+  }
+
+  private var serviceScopeMenu: some View {
+    Menu {
+      Button {
+        selectedServices.removeAll()
+      } label: {
+        if selectedServices.isEmpty {
+          Label("log.allServices", systemImage: "checkmark")
+        } else {
+          Text("log.allServices")
+        }
+      }
+      Divider()
+      ForEach(source.availableServices, id: \.self) { service in
+        Button {
+          if selectedServices.contains(service) {
+            selectedServices.remove(service)
+          } else {
+            selectedServices.insert(service)
+          }
+        } label: {
+          if selectedServices.contains(service) {
+            Label(service, systemImage: "checkmark")
+          } else {
+            Text(service)
+          }
+        }
+      }
+    } label: {
+      Label(serviceScopeTitle, systemImage: "line.3.horizontal.decrease.circle")
+    }
+  }
+
+  private var serviceScopeTitle: String {
+    if selectedServices.isEmpty {
+      return String(localized: "log.allServices")
+    }
+    if selectedServices.count == 1 {
+      return selectedServices.first ?? String(localized: "log.allServices")
+    }
+    return String(
+      format: String(localized: "log.selectedServices"),
+      selectedServices.count
+    )
   }
 
   @ViewBuilder
@@ -763,57 +1084,67 @@ private struct StackLogView: View {
   }
 
   private var logContent: some View {
-    ScrollViewReader { proxy in
-      ScrollView {
-        Color.clear
-          .frame(height: 1)
-          .id("log-start")
-        if searchResult.isActive, searchResult.matchCount == 0 {
-          ContentUnavailableView(
-            "log.noMatches",
-            systemImage: "magnifyingglass",
-            description: Text("log.noMatches.description")
-          )
-          .frame(maxWidth: .infinity, minHeight: 240)
-        } else if searchResult.isActive {
-          LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(highlightedLines.indices, id: \.self) { index in
-              Text(highlightedLines[index])
+    Group {
+      if log != nil,
+         !searchResult.isActive,
+         selectedOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        ContentUnavailableView("label.noLogOutput", systemImage: "doc.text")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        ScrollViewReader { proxy in
+          ScrollView {
+            Color.clear
+              .frame(height: 1)
+              .id("log-start")
+            if searchResult.isActive, searchResult.matchCount == 0 {
+              ContentUnavailableView(
+                "log.noMatches",
+                systemImage: "magnifyingglass",
+                description: Text("log.noMatches.description")
+              )
+              .frame(maxWidth: .infinity, minHeight: 240)
+            } else if searchResult.isActive {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(highlightedLines.indices, id: \.self) { index in
+                  Text(highlightedLines[index])
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+              }
+              .font(.system(.caption, design: .monospaced))
+              .textSelection(.enabled)
+              .padding()
+            } else {
+              Text(highlightedOutput)
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            Color.clear
+              .frame(height: 1)
+              .id("log-end")
+          }
+          .defaultScrollAnchor(.bottom)
+          .onScrollPhaseChange { _, newPhase in
+            if newPhase == .interacting {
+              followsLatest = false
             }
           }
-          .font(.system(.caption, design: .monospaced))
-          .textSelection(.enabled)
-          .padding()
-        } else {
-          Text(highlightedOutput)
-            .font(.system(.caption, design: .monospaced))
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-        }
-        Color.clear
-          .frame(height: 1)
-          .id("log-end")
-      }
-      .defaultScrollAnchor(.bottom)
-      .onScrollPhaseChange { _, newPhase in
-        if newPhase == .interacting {
-          followsLatest = false
-        }
-      }
-      .onChange(of: log) {
-        guard followsLatest, !searchResult.isActive else { return }
-        proxy.scrollTo("log-end", anchor: .bottom)
-      }
-      .onChange(of: searchText) {
-        if searchResult.isActive {
-          proxy.scrollTo("log-start", anchor: .top)
-        } else if followsLatest {
-          proxy.scrollTo("log-end", anchor: .bottom)
+          .onChange(of: log) {
+            guard followsLatest, !searchResult.isActive else { return }
+            proxy.scrollTo("log-end", anchor: .bottom)
+          }
+          .onChange(of: searchText) {
+            if searchResult.isActive {
+              proxy.scrollTo("log-start", anchor: .top)
+            } else if followsLatest {
+              proxy.scrollTo("log-end", anchor: .bottom)
+            }
+          }
         }
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .overlay(alignment: .top) {
       if let errorMessage {
         Text(errorMessage)
@@ -842,6 +1173,11 @@ private struct StackLogView: View {
 
   private var searchTaskID: SearchTaskID {
     SearchTaskID(query: searchText, stream: selectedStream, logRevision: logRevision)
+  }
+
+  private var logLoadingTaskID: String {
+    let services = selectedServices.sorted().joined(separator: ",")
+    return "\(source.id)-\(services)-\(tail)-\(appSettings.logsAutoRefresh)-\(appSettings.logRefreshInterval.rawValue)"
   }
 
   @MainActor
@@ -882,13 +1218,22 @@ private struct StackLogView: View {
         address: try profile.address,
         authentication: credentials.authentication
       )
-      let log: KomodoLog
-      if let serverID = service.container?.serverID, let container = service.container?.name {
-        log = try await client.getContainerLog(server: serverID, container: container)
-      } else {
-        log = try await client.getStackLog(stack: stackID, services: [service.service])
+      let loadedLog: KomodoLog
+      switch source {
+      case .stack(let stackID, _, _, _):
+        loadedLog = try await client.getStackLog(
+          stack: stackID,
+          services: selectedServices.sorted(),
+          tail: tail
+        )
+      case .container(let serverID, let name):
+        loadedLog = try await client.getContainerLog(
+          server: serverID,
+          container: name,
+          tail: tail
+        )
       }
-      self.log = log
+      log = loadedLog
       logRevision += 1
       errorMessage = nil
     } catch is CancellationError {

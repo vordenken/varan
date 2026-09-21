@@ -759,7 +759,7 @@ struct KomodoLog: Decodable, Equatable, Sendable {
     case (false, false): "\(cleanedStandardOutput)\n\n\(String(localized: "label.errorOutput"))\n\(cleanedErrorOutput)"
     case (false, true): cleanedStandardOutput
     case (true, false): cleanedErrorOutput
-    case (true, true): String(localized: "label.noLogOutput")
+    case (true, true): ""
     }
   }
 

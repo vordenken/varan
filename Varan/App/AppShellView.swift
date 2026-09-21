@@ -459,30 +459,10 @@ private struct MobileAppShellView: View {
   @ViewBuilder
   private var adaptiveTabView: some View {
     if #available(iOS 26.0, *) {
-      if showsLiveStatus {
-        tabs
-          .tabViewBottomAccessory {
-            MobileLiveUpdateAccessory(
-              status: liveUpdates.status
-            )
-          }
-          .tabBarMinimizeBehavior(.onScrollDown)
-      } else {
-        tabs
-          .tabBarMinimizeBehavior(.onScrollDown)
-      }
+      tabs
+        .tabBarMinimizeBehavior(.onScrollDown)
     } else {
       tabs
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-          if showsLiveStatus {
-            LiveConnectionStatusView(
-              status: liveUpdates.status
-            )
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.bar)
-          }
-        }
     }
   }
 
@@ -593,10 +573,6 @@ private struct MobileAppShellView: View {
     profiles.first { $0.id == selectedProfileID }
   }
 
-  private var showsLiveStatus: Bool {
-    selectedTab != .settings && selectedProfile != nil
-  }
-
   @MainActor
   private func connectLiveUpdates() async {
     guard appSettings.liveUpdatesEnabled, let selectedProfile else {
@@ -615,51 +591,6 @@ private struct MobileAppShellView: View {
       )
     } catch {
       liveUpdates.stop()
-    }
-  }
-}
-
-@available(iOS 26.0, *)
-private struct MobileLiveUpdateAccessory: View {
-  @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-  let status: LiveConnectionStatus
-
-  var body: some View {
-    if placement == .inline {
-      HStack(spacing: 5) {
-        Image(systemName: symbol)
-          .foregroundStyle(color)
-        Text(title)
-          .font(.caption.weight(.medium))
-      }
-      .accessibilityElement(children: .combine)
-    } else {
-      LiveConnectionStatusView(status: status)
-        .padding(.horizontal)
-    }
-  }
-
-  private var title: LocalizedStringKey {
-    switch status {
-    case .connecting: "status.connecting"
-    case .live: "status.live"
-    case .offline: "status.offline"
-    }
-  }
-
-  private var symbol: String {
-    switch status {
-    case .connecting: "network"
-    case .live: "bolt.horizontal.circle.fill"
-    case .offline: "wifi.slash"
-    }
-  }
-
-  private var color: Color {
-    switch status {
-    case .connecting: .orange
-    case .live: .green
-    case .offline: .secondary
     }
   }
 }
