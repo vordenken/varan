@@ -24,7 +24,7 @@ struct VaranApp: App {
 
   @ViewBuilder
   private var startupContent: some View {
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(macOS))
     if ScreenshotDemo.enabled {
       ScreenshotDemoRootView()
     } else {

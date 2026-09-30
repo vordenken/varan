@@ -116,17 +116,20 @@ struct SettingsView: View {
           }
         }
         .disabled(!settings.metricsAutoRefresh)
+        Text("settings.metrics.description")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       Section("settings.section.logs") {
-        Toggle("log.autoRefresh", isOn: $settings.logsAutoRefresh)
         Picker("settings.logRefreshInterval", selection: $settings.logRefreshInterval) {
           ForEach(LogRefreshInterval.allCases) { interval in
             Text(interval.title).tag(interval)
           }
         }
-        .disabled(!settings.logsAutoRefresh)
-        Toggle("log.followLatest", isOn: $settings.logsFollowLatest)
+        Text("settings.logs.description")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       Section {

@@ -100,6 +100,7 @@ struct AppShellView: View {
               Button("action.addConnection", systemImage: "plus") {
                 showingAddConnection = true
               }
+              .keyboardShortcut("n", modifiers: .command)
               SettingsLink {
                 Label("settings.title", systemImage: "gearshape")
               }
@@ -295,7 +296,12 @@ private struct OnboardingView: View {
         OnboardingBenefit(icon: "chart.xyaxis.line", title: "onboarding.benefit.insights")
         OnboardingBenefit(icon: "rectangle.stack.badge.plus", title: "onboarding.benefit.multiple")
       }
+      #if os(macOS)
+      .frame(width: 320, alignment: .leading)
+      .frame(maxWidth: .infinity)
+      #else
       .frame(maxWidth: 440, alignment: .leading)
+      #endif
 
       Spacer(minLength: 16)
 
@@ -312,6 +318,8 @@ private struct OnboardingView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
 #if os(iOS)
     .toolbar(.hidden, for: .navigationBar)
+#else
+    .navigationTitle("")
 #endif
   }
 
@@ -365,8 +373,7 @@ private struct OnboardingBenefit: View {
         .accessibilityHidden(true)
       Text(title)
         .font(.headline)
-        .fixedSize(horizontal: false, vertical: true)
-      Spacer(minLength: 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     .accessibilityElement(children: .combine)
   }
@@ -425,6 +432,7 @@ private struct MobileAppShellView: View {
         guard scenePhase == .active else { return }
         await connectLiveUpdates()
       }
+      .task(id: refreshScheduleID) { configureRefreshIntervals() }
       .onChange(of: scenePhase) { _, newPhase in
         guard appSettings.liveUpdatesEnabled else {
           liveUpdates.stop()
@@ -453,7 +461,23 @@ private struct MobileAppShellView: View {
           selectedProfileID = profileIDs.first
         }
       }
-      .onDisappear { liveUpdates.stop() }
+      .onDisappear {
+        liveUpdates.stop()
+        liveUpdates.stopRefreshIntervals()
+      }
+  }
+
+  private var refreshScheduleID: String {
+    "\(selectedProfileID?.uuidString ?? "none")-\(scenePhase)-\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(appSettings.logRefreshInterval.rawValue)"
+  }
+
+  @MainActor private func configureRefreshIntervals() {
+    liveUpdates.configureRefreshIntervals(
+      metricsSeconds: selectedProfile != nil && scenePhase == .active && appSettings.metricsAutoRefresh
+        ? appSettings.metricsRefreshInterval.rawValue : nil,
+      logsSeconds: selectedProfile != nil && scenePhase == .active
+        ? appSettings.logRefreshInterval.seconds : nil
+    )
   }
 
   @ViewBuilder

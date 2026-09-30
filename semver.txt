@@ -1,5 +1,30 @@
-0.4.0
+0.5.0
 ---
+### Development Preview
+- Preserved server edit values from available API data and prevented incomplete responses from appearing as empty settings
+- Displayed the detected public IP separately from the optional external address setting
+- Added grouped server-wide container and Docker maintenance actions with confirmations matching stack and container menus
+- Localized the server load average label in German and collapsed long related stack and container lists
+- Show available server address and region immediately in the overview and omit empty values
+- Added stack and container filters for state, host, tags, updates, and published ports across all list pages
+- Centralized metric and log refresh intervals and clarified WebSocket and timed refresh behavior
+- Collapsed container port lists longer than three entries with an inline expand control
+- Expanded server list rows with explicit status, location, CPU, memory, and resource counts
+- Kept unavailable server metrics distinct from reported zero values
+- Refreshed server list metrics on the configured interval and resource counts after related updates
+- Added server search and filters for state, tags, and related resources across all server pages
+- Added tappable total, active, and problem counts to stack and container overviews with prominent problem states
+- Simplified log refresh settings and made following new lines controllable in the log viewer
+- Clarified missing and stale server metrics and API validation errors
+- Improved empty, refresh-error, and permission-denied resource states
+- Distinguished missing Container and historical metrics from reported zeros
+- Added historical metric freshness checks and recovered detail sections after connection failures
+- Enabled the deterministic screenshot demo on macOS
+- Centered the macOS onboarding benefits, removed its window title, and compacted the connection form
+- Kept iOS resource toolbar actions in a consistent order across lists, details, and logs
+- Simplified server metric freshness details and replaced redundant iOS refresh buttons with pull-to-refresh
+
+## 0.4.0
 ### Development Preview
 - Added state-aware stack and container toolbar menus with labeled, grouped actions that keep detail content unobscured
 - Restored a dedicated unified log viewer for stack, service, and container logs with responsive background search

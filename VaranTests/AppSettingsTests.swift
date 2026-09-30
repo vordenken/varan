@@ -12,7 +12,6 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertTrue(settings.liveUpdatesEnabled)
     XCTAssertTrue(settings.metricsAutoRefresh)
     XCTAssertEqual(settings.metricsRefreshInterval, .fifteenSeconds)
-    XCTAssertTrue(settings.logsAutoRefresh)
     XCTAssertEqual(settings.logRefreshInterval, .fiveSeconds)
     XCTAssertTrue(settings.logsFollowLatest)
     XCTAssertEqual(settings.defaultResourceSection, .stacks)
@@ -26,8 +25,7 @@ final class AppSettingsTests: XCTestCase {
     settings.liveUpdatesEnabled = false
     settings.metricsAutoRefresh = false
     settings.metricsRefreshInterval = .oneMinute
-    settings.logsAutoRefresh = false
-    settings.logRefreshInterval = .thirtySeconds
+    settings.logRefreshInterval = .manual
     settings.logsFollowLatest = false
     settings.defaultResourceSection = .containers
 
@@ -36,8 +34,7 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertFalse(restored.liveUpdatesEnabled)
     XCTAssertFalse(restored.metricsAutoRefresh)
     XCTAssertEqual(restored.metricsRefreshInterval, .oneMinute)
-    XCTAssertFalse(restored.logsAutoRefresh)
-    XCTAssertEqual(restored.logRefreshInterval, .thirtySeconds)
+    XCTAssertEqual(restored.logRefreshInterval, .manual)
     XCTAssertFalse(restored.logsFollowLatest)
     XCTAssertEqual(restored.defaultResourceSection, .containers)
   }
@@ -58,12 +55,32 @@ final class AppSettingsTests: XCTestCase {
   }
 
   @MainActor
+  func testLegacyLogRefreshSettingsMigrateToSingleSelection() {
+    for (enabled, expected) in [
+      (false, LogRefreshInterval.manual),
+      (true, LogRefreshInterval.thirtySeconds),
+    ] {
+      let (defaults, suiteName) = makeDefaults()
+      defer { defaults.removePersistentDomain(forName: suiteName) }
+      defaults.set(enabled, forKey: "settings.logsAutoRefresh")
+      defaults.set(LogRefreshInterval.thirtySeconds.rawValue, forKey: "settings.logRefreshInterval")
+
+      let settings = AppSettings(defaults: defaults)
+
+      XCTAssertEqual(settings.logRefreshInterval, expected)
+      XCTAssertNil(defaults.object(forKey: "settings.logsAutoRefresh"))
+      XCTAssertEqual(defaults.integer(forKey: "settings.logRefreshInterval"), expected.rawValue)
+    }
+  }
+
+  @MainActor
   func testResetRestoresDefaultsWithoutTouchingUnrelatedValues() {
     let (defaults, suiteName) = makeDefaults()
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let settings = AppSettings(defaults: defaults)
     settings.liveUpdatesEnabled = false
     settings.metricsRefreshInterval = .oneMinute
+    settings.logRefreshInterval = .manual
     settings.logsFollowLatest = false
     settings.defaultResourceSection = .servers
     defaults.set("preserved", forKey: "unrelated")
@@ -72,6 +89,7 @@ final class AppSettingsTests: XCTestCase {
 
     XCTAssertTrue(settings.liveUpdatesEnabled)
     XCTAssertEqual(settings.metricsRefreshInterval, .fifteenSeconds)
+    XCTAssertEqual(settings.logRefreshInterval, .fiveSeconds)
     XCTAssertTrue(settings.logsFollowLatest)
     XCTAssertEqual(settings.defaultResourceSection, .stacks)
     XCTAssertEqual(defaults.string(forKey: "unrelated"), "preserved")

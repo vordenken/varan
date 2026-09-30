@@ -33,10 +33,21 @@
 		A10000000000000000000018 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* SettingsView.swift */; };
 		A10000000000000000000019 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* AppSettingsTests.swift */; };
 		A1000000000000000000001A /* ScreenshotDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* ScreenshotDemo.swift */; };
+		A1000000000000000000001B /* VaranUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000022 /* VaranUITests.swift */; };
+		A1000000000000000000001C /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* XCTest.framework */; };
+		A1000000000000000000001D /* EditorSaveGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* EditorSaveGateTests.swift */; };
+		A1000000000000000000001E /* ResourceOverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* ResourceOverviewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		C10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10000000000000000000001;
+			remoteInfo = Varan;
+		};
+		C10000000000000000000003 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D10000000000000000000001 /* Project object */;
 			proxyType = 1;
@@ -78,6 +89,10 @@
 		B1000000000000000000001F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B10000000000000000000020 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000021 /* ScreenshotDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotDemo.swift; sourceTree = "<group>"; };
+		B10000000000000000000022 /* VaranUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaranUITests.swift; sourceTree = "<group>"; };
+		B10000000000000000000023 /* VaranUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VaranUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000024 /* EditorSaveGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSaveGateTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000025 /* ResourceOverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceOverviewTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +120,7 @@
 				B10000000000000000000016 /* LocalOverrides.xcconfig */,
 				D10000000000000000000003 /* Varan */,
 				D1000000000000000000000A /* VaranTests */,
+				D10000000000000000000013 /* VaranUITests */,
 				D1000000000000000000000B /* Frameworks */,
 				D1000000000000000000000C /* Products */,
 			);
@@ -189,6 +205,8 @@
 			children = (
 				B10000000000000000000007 /* ServerAddressTests.swift */,
 				B1000000000000000000000C /* KomodoAPIClientTests.swift */,
+				B10000000000000000000024 /* EditorSaveGateTests.swift */,
+				B10000000000000000000025 /* ResourceOverviewTests.swift */,
 				B1000000000000000000001D /* KomodoLiveUpdateTests.swift */,
 				B10000000000000000000020 /* AppSettingsTests.swift */,
 				B1000000000000000000000D /* KeychainStoreTests.swift */,
@@ -210,6 +228,7 @@
 			children = (
 				B10000000000000000000009 /* Varan.app */,
 				B1000000000000000000000A /* VaranTests.xctest */,
+				B10000000000000000000023 /* VaranUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -237,6 +256,14 @@
 				B1000000000000000000001F /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000013 /* VaranUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000022 /* VaranUITests.swift */,
+			);
+			path = VaranUITests;
 			sourceTree = "<group>";
 		};
 		D1000000000000000000000E /* Connections */ = {
@@ -302,6 +329,24 @@
 			productReference = B1000000000000000000000A /* VaranTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		E10000000000000000000007 /* VaranUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E10000000000000000000008 /* Build configuration list for PBXNativeTarget "VaranUITests" */;
+			buildPhases = (
+				F10000000000000000000007 /* Sources */,
+				F10000000000000000000008 /* Frameworks */,
+				F10000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C10000000000000000000004 /* PBXTargetDependency */,
+			);
+			name = VaranUITests;
+			productName = VaranUITests;
+			productReference = B10000000000000000000023 /* VaranUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -316,6 +361,10 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					E10000000000000000000002 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = E10000000000000000000001;
+					};
+					E10000000000000000000007 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = E10000000000000000000001;
 					};
@@ -337,11 +386,18 @@
 			targets = (
 				E10000000000000000000001 /* Varan */,
 				E10000000000000000000002 /* VaranTests */,
+				E10000000000000000000007 /* VaranUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		F10000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F10000000000000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -362,6 +418,18 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F10000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A1000000000000000000001B /* VaranUITests.swift in Sources */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A1000000000000000000001C /* XCTest.framework in Frameworks */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F10000000000000000000003 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -391,6 +459,8 @@
 			files = (
 				A10000000000000000000007 /* ServerAddressTests.swift in Sources */,
 				A10000000000000000000009 /* KomodoAPIClientTests.swift in Sources */,
+				A1000000000000000000001D /* EditorSaveGateTests.swift in Sources */,
+				A1000000000000000000001E /* ResourceOverviewTests.swift in Sources */,
 				A10000000000000000000016 /* KomodoLiveUpdateTests.swift in Sources */,
 				A10000000000000000000019 /* AppSettingsTests.swift in Sources */,
 				A1000000000000000000000A /* KeychainStoreTests.swift in Sources */,
@@ -405,6 +475,11 @@
 			isa = PBXTargetDependency;
 			target = E10000000000000000000001 /* Varan */;
 			targetProxy = C10000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		C10000000000000000000004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E10000000000000000000001 /* Varan */;
+			targetProxy = C10000000000000000000003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -421,6 +496,8 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		E20000000000000000000007 /* Debug UI Tests */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; PRODUCT_BUNDLE_IDENTIFIER = de.example.VaranUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = auto; SUPPORTED_PLATFORMS = iphonesimulator; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Varan; }; name = Debug; };
+		E20000000000000000000008 /* Release UI Tests */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; PRODUCT_BUNDLE_IDENTIFIER = de.example.VaranUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = auto; SUPPORTED_PLATFORMS = iphonesimulator; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Varan; }; name = Release; };
 		E20000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -469,7 +546,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -498,7 +575,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -554,6 +631,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E10000000000000000000008 /* Build configuration list for PBXNativeTarget "VaranUITests" */ = {isa = XCConfigurationList; buildConfigurations = (E20000000000000000000007, E20000000000000000000008,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		E10000000000000000000003 /* Build configuration list for PBXNativeTarget "Varan" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

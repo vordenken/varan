@@ -72,6 +72,7 @@ struct ResourceBrowserView: View {
       guard scenePhase == .active else { return }
       await connectLiveUpdates()
     }
+    .task(id: refreshScheduleID) { configureRefreshIntervals() }
     .onChange(of: scenePhase) { _, newPhase in
       guard appSettings.liveUpdatesEnabled else {
         liveUpdates.stop()
@@ -90,7 +91,22 @@ struct ResourceBrowserView: View {
         liveUpdates.stop()
       }
     }
-    .onDisappear { liveUpdates.stop() }
+    .onDisappear {
+      liveUpdates.stop()
+      liveUpdates.stopRefreshIntervals()
+    }
+  }
+
+  private var refreshScheduleID: String {
+    "\(scenePhase)-\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(appSettings.logRefreshInterval.rawValue)"
+  }
+
+  @MainActor private func configureRefreshIntervals() {
+    liveUpdates.configureRefreshIntervals(
+      metricsSeconds: scenePhase == .active && appSettings.metricsAutoRefresh
+        ? appSettings.metricsRefreshInterval.rawValue : nil,
+      logsSeconds: scenePhase == .active ? appSettings.logRefreshInterval.seconds : nil
+    )
   }
 
   @MainActor
@@ -144,6 +160,15 @@ struct LiveConnectionStatusButton: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+        LabeledContent(
+          "settings.section.metrics",
+          value: appSettings.metricsAutoRefresh
+            ? appSettings.metricsRefreshInterval.title : String(localized: "settings.refresh.onEvents")
+        )
+        LabeledContent(
+          "settings.section.logs",
+          value: appSettings.logRefreshInterval.title
+        )
         if let retryError {
           Text(retryError)
             .font(.caption)
@@ -155,7 +180,7 @@ struct LiveConnectionStatusButton: View {
         .disabled(!appSettings.liveUpdatesEnabled || liveUpdates.status == .connecting)
       }
       .padding()
-      .frame(minWidth: 220)
+      .frame(minWidth: 260)
       .presentationCompactAdaptation(.popover)
     }
   }
@@ -232,15 +257,15 @@ struct ResourceListRow: View {
 
       if let status, !status.isEmpty {
         Text(status)
-          .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
+          .font(.caption.weight(.semibold).monospacedDigit())
+          .foregroundStyle(symbolColor)
       }
     }
   }
 }
 
 func localizedResourceState(_ rawState: String) -> String {
-  switch rawState.lowercased() {
+  switch rawState.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
   case "running", "healthy": String(localized: "state.running")
   case "paused": String(localized: "state.paused")
   case "stopped", "exited": String(localized: "state.stopped")
@@ -248,30 +273,150 @@ func localizedResourceState(_ rawState: String) -> String {
   case "restarting": String(localized: "state.restarting")
   case "deploying": String(localized: "state.deploying")
   case "removing": String(localized: "state.removing")
-  case "unhealthy", "dead": String(localized: "state.unhealthy")
+  case "unhealthy": String(localized: "state.unhealthy")
+  case "dead": String(localized: "state.dead")
   case "down": String(localized: "state.down")
+  case "failed": String(localized: "state.failed")
+  case "error": String(localized: "state.error")
   default: String(localized: "state.unknown")
   }
 }
 
 func resourceStateSymbol(_ rawState: String) -> String {
-  switch rawState.lowercased() {
-  case "running", "healthy": "checkmark.circle.fill"
-  case "paused", "stopped", "exited", "created": "pause.circle.fill"
-  case "deploying", "restarting", "removing":
-    "arrow.trianglehead.2.clockwise.rotate.90.circle.fill"
-  case "unhealthy", "dead": "exclamationmark.triangle.fill"
-  case "down": "minus.circle.fill"
-  default: "questionmark.circle.fill"
+  switch ResourceStateCategory(rawState) {
+  case .running: "checkmark.circle.fill"
+  case .paused, .stopped: "pause.circle.fill"
+  case .attention: "exclamationmark.triangle.fill"
+  case .transitioning: "arrow.trianglehead.2.clockwise.rotate.90.circle.fill"
+  case .other: "questionmark.circle.fill"
   }
 }
 
 func resourceStateColor(_ rawState: String) -> Color {
-  switch rawState.lowercased() {
-  case "running", "healthy": .green
-  case "unhealthy", "dead": .red
-  case "deploying", "restarting", "removing": .blue
-  default: .secondary
+  switch ResourceStateCategory(rawState) {
+  case .running: .green
+  case .attention: .red
+  case .transitioning: .blue
+  case .paused, .stopped, .other: .secondary
+  }
+}
+
+enum ResourceStateCategory {
+  case running
+  case paused
+  case stopped
+  case attention
+  case transitioning
+  case other
+
+  init(_ rawState: String) {
+    switch rawState.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case "running", "healthy": self = .running
+    case "paused": self = .paused
+    case "stopped", "exited", "created": self = .stopped
+    case "failed", "error", "unhealthy", "dead", "down": self = .attention
+    case "deploying", "restarting", "removing": self = .transitioning
+    default: self = .other
+    }
+  }
+}
+
+struct ResourceOverviewCounts: Equatable {
+  let total: Int
+  let active: Int
+  let problems: Int
+
+  init<S: Sequence>(states: S) where S.Element == String {
+    var total = 0
+    var active = 0
+    var problems = 0
+    for state in states {
+      total += 1
+      switch ResourceStateCategory(state) {
+      case .running: active += 1
+      case .attention: problems += 1
+      case .paused, .stopped, .transitioning, .other: break
+      }
+    }
+    self.total = total
+    self.active = active
+    self.problems = problems
+  }
+}
+
+struct ResourceStatusSummary: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  let counts: ResourceOverviewCounts
+  let isStale: Bool
+  let showTotal: () -> Void
+  let showActive: () -> Void
+  let showProblems: () -> Void
+
+  var body: some View {
+    VStack(alignment: .center, spacing: 6) {
+      LazyVGrid(
+        columns: Array(
+          repeating: GridItem(.flexible(), spacing: 8),
+          count: dynamicTypeSize.isAccessibilitySize ? 1 : 3
+        ),
+        alignment: .center,
+        spacing: 8
+      ) {
+        Button(action: showTotal) {
+          metric(counts.total, title: "summary.total", symbol: "square.stack.3d.up", color: .primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("overview-total")
+        Button(action: showActive) {
+          metric(counts.active, title: "summary.active", symbol: "checkmark.circle.fill", color: .green)
+        }
+        .buttonStyle(.plain)
+        .disabled(counts.active == 0)
+        .accessibilityIdentifier("overview-active")
+        Button(action: showProblems) {
+          metric(
+            counts.problems,
+            title: "summary.problems",
+            symbol: "exclamationmark.triangle.fill",
+            color: counts.problems > 0 ? .red : .secondary
+          )
+        }
+        .buttonStyle(.plain)
+        .disabled(counts.problems == 0)
+        .accessibilityIdentifier("overview-problems")
+      }
+      if isStale {
+        Label("summary.refreshFailed", systemImage: "clock.badge.exclamationmark")
+          .font(.caption)
+          .foregroundStyle(Color.secondary)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .center)
+    .foregroundStyle(.primary)
+  }
+
+  private func metric(
+    _ value: Int,
+    title: LocalizedStringKey,
+    symbol: String,
+    color: Color
+  ) -> some View {
+    VStack(alignment: .center, spacing: 2) {
+      HStack(spacing: 5) {
+        Image(systemName: symbol)
+          .foregroundStyle(color)
+          .accessibilityHidden(true)
+        Text(value.formatted())
+          .foregroundStyle(color)
+          .font(.headline.monospacedDigit())
+      }
+      Text(title)
+        .font(.caption)
+        .foregroundStyle(Color.secondary)
+    }
+    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -291,6 +436,49 @@ func makeKomodoClient(profile: ServerProfile, keychainStore: KeychainStore) asyn
   return KomodoAPIClient(address: try profile.address, authentication: credentials.authentication)
 }
 
+private enum ServerStateFilter: String, CaseIterable, Identifiable {
+  case all
+  case online
+  case unavailable
+  case disabled
+
+  var id: Self { self }
+  var title: LocalizedStringKey {
+    switch self {
+    case .all: "filter.allServers"
+    case .online: "serverState.ok"
+    case .unavailable: "filter.unavailableServers"
+    case .disabled: "serverState.disabled"
+    }
+  }
+
+  func includes(_ state: KomodoServerState) -> Bool {
+    switch (self, state) {
+    case (.all, _), (.online, .ok), (.unavailable, .notOk), (.disabled, .disabled):
+      true
+    case (.unavailable, .unknown(_)):
+      true
+    default:
+      false
+    }
+  }
+}
+
+private enum ServerResourceFilter: String, CaseIterable, Identifiable {
+  case all
+  case stacks
+  case containers
+
+  var id: Self { self }
+  var title: LocalizedStringKey {
+    switch self {
+    case .all: "filter.allServers"
+    case .stacks: "filter.serversWithStacks"
+    case .containers: "filter.serversWithContainers"
+    }
+  }
+}
+
 struct ServerListView: View {
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let profile: ServerProfile
@@ -298,6 +486,11 @@ struct ServerListView: View {
   @ObservedObject var appSettings: AppSettings
   @State private var servers: [ServerListItem] = []
   @State private var searchText = ""
+  @State private var stateFilter: ServerStateFilter = .all
+  @State private var resourceFilter: ServerResourceFilter = .all
+  @State private var selectedTags: Set<String> = []
+  @State private var stackCountsByServer: [String: Int]?
+  @State private var containerCountsByServer: [String: Int]?
   @State private var errorMessage: String?
   @State private var isLoading = true
   @State private var showingCreate = false
@@ -312,25 +505,46 @@ struct ServerListView: View {
           Button("action.retry") { Task { await load() } }
         }
       } else {
-        List(filteredServers) { server in
-          NavigationLink {
-            ServerDetailView(
-              summary: server,
-              profile: profile,
-              keychainStore: keychainStore,
-              appSettings: appSettings
-            )
-              .environmentObject(liveUpdates)
-          } label: {
-            ResourceListRow(
-              title: server.name,
-              subtitle: serverSubtitle(server),
-              status: server.info.stats.map {
-                String(format: String(localized: "metrics.cpuCompact"), $0.cpuPercent)
-              },
-              symbol: server.info.state == .ok ? "checkmark.circle.fill" : "server.rack",
-              symbolColor: server.info.state == .ok ? .green : .secondary
-            )
+        List {
+          if filteredServers.isEmpty {
+            if searchText.isEmpty, stateFilter == .all, resourceFilter == .all, selectedTags.isEmpty {
+              ContentUnavailableView(
+                "message.noServers",
+                systemImage: "server.rack",
+                description: Text("message.noServers.description")
+              )
+            } else if !searchText.isEmpty {
+              ContentUnavailableView.search(text: searchText)
+            } else {
+              ContentUnavailableView(
+                "message.noServersMatchFilters",
+                systemImage: "line.3.horizontal.decrease.circle"
+              )
+            }
+          } else {
+            ForEach(filteredServers) { server in
+              NavigationLink {
+                ServerDetailView(
+                  summary: server,
+                  profile: profile,
+                  keychainStore: keychainStore,
+                  appSettings: appSettings
+                )
+                  .environmentObject(liveUpdates)
+              } label: {
+                ServerSummaryRow(
+                  server: server,
+                  stackCount: stackCountsByServer.map { $0[server.name] ?? 0 },
+                  containerCount: containerCountsByServer.map {
+                    $0[server.id] ?? $0[server.name] ?? 0
+                  }
+                )
+              }
+            }
+          }
+          if let errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+              .foregroundStyle(.secondary)
           }
         }
         .refreshable { await load() }
@@ -341,14 +555,62 @@ struct ServerListView: View {
     .searchable(text: $searchText, prompt: "action.searchServers")
     .toolbar {
       ToolbarItemGroup(placement: .primaryAction) {
+        Menu {
+          Picker("filter.serverState", selection: $stateFilter) {
+            ForEach(ServerStateFilter.allCases) { filter in
+              Text(filter.title).tag(filter)
+            }
+          }
+          if stackCountsByServer != nil, containerCountsByServer != nil {
+            Picker("filter.relatedResources", selection: $resourceFilter) {
+              ForEach(ServerResourceFilter.allCases) { filter in
+                Text(filter.title).tag(filter)
+              }
+            }
+          }
+          if !availableTags.isEmpty {
+            Section("filter.tags") {
+              ForEach(availableTags, id: \.self) { tag in
+                Button {
+                  if selectedTags.contains(tag) {
+                    selectedTags.remove(tag)
+                  } else {
+                    selectedTags.insert(tag)
+                  }
+                } label: {
+                  if selectedTags.contains(tag) {
+                    Label(tag, systemImage: "checkmark")
+                  } else {
+                    Text(tag)
+                  }
+                }
+              }
+              if !selectedTags.isEmpty {
+                Button("filter.clearTags") { selectedTags.removeAll() }
+              }
+            }
+          }
+          if hasActiveFilters {
+            Button("filter.reset") { resetFilters() }
+          }
+        } label: {
+          Label(
+            "filter.servers",
+            systemImage: hasActiveFilters
+              ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
+          )
+        }
         Button("action.addServer", systemImage: "plus") { showingCreate = true }
         LiveConnectionStatusButton(
           profile: profile,
           keychainStore: keychainStore,
           appSettings: appSettings
         )
+        #if os(macOS)
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
           .disabled(isLoading)
+          .keyboardShortcut("r", modifiers: .command)
+        #endif
       }
     }
     .sheet(isPresented: $showingCreate) {
@@ -360,8 +622,13 @@ struct ServerListView: View {
       }
     }
     .task(id: profile.id) { await load() }
+    .onChange(of: liveUpdates.metricsRefreshGeneration) { _, _ in
+      if !isLoading { Task { await refreshServerSummaries() } }
+    }
     .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
-      if event.affects(.server) { Task { await load() } }
+      if event.affects(.server) || event.affects(.stack) || event.affects(.deployment) {
+        Task { await load() }
+      }
     }
     .onChange(of: liveUpdates.refreshGeneration) { _, _ in
       Task { await load() }
@@ -369,32 +636,278 @@ struct ServerListView: View {
   }
 
   private var filteredServers: [ServerListItem] {
-    guard !searchText.isEmpty else { return servers }
-    return servers.filter { $0.name.localizedCaseInsensitiveContains(searchText)
-      || $0.info.region.localizedCaseInsensitiveContains(searchText) }
+    servers.filter { server in
+      stateFilter.includes(server.info.state)
+        && includesRelatedResources(server)
+        && selectedTags.isSubset(of: Set(server.tags))
+        && (searchText.isEmpty
+          || server.name.localizedCaseInsensitiveContains(searchText)
+          || server.info.region.localizedCaseInsensitiveContains(searchText)
+          || (server.info.address?.localizedCaseInsensitiveContains(searchText) == true)
+          || (server.info.externalAddress?.localizedCaseInsensitiveContains(searchText) == true)
+          || server.tags.contains { $0.localizedCaseInsensitiveContains(searchText) })
+    }
   }
 
-  private func serverSubtitle(_ server: ServerListItem) -> String? {
-    let subtitle = [server.info.region, server.info.address ?? ""]
-      .filter { !$0.isEmpty }
-      .joined(separator: " · ")
-    return subtitle.isEmpty ? nil : subtitle
+  private func includesRelatedResources(_ server: ServerListItem) -> Bool {
+    switch resourceFilter {
+    case .all:
+      true
+    case .stacks:
+      (stackCountsByServer?[server.name] ?? 0) > 0
+    case .containers:
+      (containerCountsByServer?[server.id] ?? containerCountsByServer?[server.name] ?? 0) > 0
+    }
+  }
+
+  private var availableTags: [String] {
+    Array(Set(servers.flatMap(\.tags)).union(selectedTags)).sorted {
+      $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+    }
+  }
+
+  private var hasActiveFilters: Bool {
+    stateFilter != .all || resourceFilter != .all || !selectedTags.isEmpty
+  }
+
+  private func resetFilters() {
+    stateFilter = .all
+    resourceFilter = .all
+    selectedTags.removeAll()
   }
 
   @MainActor private func load() async {
     isLoading = true
     defer { isLoading = false }
     do {
-      servers = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-        .listServers()
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      async let loadedServers = client.listAllServers()
+      async let loadedStacks = loadAllStacks(using: client)
+      async let loadedContainers = loadAllContainers(using: client)
+      servers = try await loadedServers
+      stackCountsByServer = await loadedStacks
+      containerCountsByServer = await loadedContainers
+      if (resourceFilter == .stacks && stackCountsByServer == nil)
+        || (resourceFilter == .containers && containerCountsByServer == nil) {
+        resourceFilter = .all
+      }
       errorMessage = nil
     } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+  }
+
+  @MainActor private func refreshServerSummaries() async {
+    do {
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      servers = try await client.listAllServers()
+      errorMessage = nil
+    } catch is CancellationError {} catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func loadAllStacks(using client: KomodoAPIClient) async -> [String: Int]? {
+    do {
+      var result: [StackListItem] = []
+      var page = 0
+      repeat {
+        let next = try await client.listStacks(page: page, limit: 100)
+        result.append(contentsOf: next)
+        page += 1
+        if next.count < 100 { break }
+      } while !Task.isCancelled
+      return result.reduce(into: [String: Int]()) { counts, stack in
+        guard !stack.info.serverName.isEmpty else { return }
+        counts[stack.info.serverName, default: 0] += 1
+      }
+    } catch {
+      return nil
+    }
+  }
+
+  private func loadAllContainers(using client: KomodoAPIClient) async -> [String: Int]? {
+    do {
+      var result: [ContainerListItem] = []
+      var page = 0
+      repeat {
+        let next = try await client.listAllContainers(page: page, limit: 100)
+        result.append(contentsOf: next)
+        page += 1
+        if next.count < 100 { break }
+      } while !Task.isCancelled
+      return result.reduce(into: [String: Int]()) { counts, container in
+        for identifier in Set([container.serverID, container.serverName].compactMap { $0 }) {
+          counts[identifier, default: 0] += 1
+        }
+      }
+    } catch {
+      return nil
+    }
+  }
+}
+
+private struct ServerSummaryRow: View {
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+  let server: ServerListItem
+  let stackCount: Int?
+  let containerCount: Int?
+
+  private var currentStats: MinimalSystemStats? {
+    server.info.state == .ok ? server.info.stats : nil
+  }
+
+  private var status: (title: LocalizedStringKey, color: Color) {
+    switch server.info.state {
+    case .ok: ("serverState.ok", .green)
+    case .notOk: ("serverState.notOk", .red)
+    case .disabled: ("serverState.disabled", .secondary)
+    case .unknown: ("serverState.unavailable", .orange)
+    }
+  }
+
+  private var location: String {
+    [server.info.region, server.info.address ?? ""]
+      .filter { !$0.isEmpty }
+      .joined(separator: " · ")
+  }
+
+  private var footer: String {
+    ([server.info.version.map { "Komodo \($0)" }] + server.tags.map { "#\($0)" })
+      .compactMap { $0 }
+      .joined(separator: " · ")
+  }
+
+  private var cpuValue: String? {
+    guard let currentStats, currentStats.availableFields.contains("cpu_perc") else { return nil }
+    return currentStats.cpuPercent.formatted(.number.precision(.fractionLength(1))) + " %"
+  }
+
+  private var memoryValue: String? {
+    guard let currentStats,
+      currentStats.availableFields.isSuperset(of: ["mem_used_gb", "mem_total_gb"]),
+      currentStats.memoryTotalGB > 0
+    else { return nil }
+    let used = currentStats.memoryUsedGB.formatted(.number.precision(.fractionLength(1)))
+    let total = currentStats.memoryTotalGB.formatted(.number.precision(.fractionLength(0...1)))
+    return String(format: String(localized: "server.summary.memoryValue"), used, total)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 9) {
+      HStack(spacing: 10) {
+        Image(systemName: "server.rack")
+          .foregroundStyle(status.color)
+          .frame(width: 24)
+          .accessibilityHidden(true)
+        Text(server.name)
+          .font(.headline)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+        Spacer(minLength: 4)
+        HStack(spacing: 5) {
+          Circle()
+            .fill(status.color)
+            .frame(width: 7, height: 7)
+            .accessibilityHidden(true)
+          Text(status.title)
+        }
+        .font(.caption)
+        .foregroundStyle(status.color)
+        .fixedSize(horizontal: true, vertical: false)
+      }
+
+      if !location.isEmpty {
+        Text(location)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .padding(.leading, 34)
+      }
+
+      LazyVGrid(
+        columns: Array(
+          repeating: GridItem(.flexible(), alignment: .leading),
+          count: horizontalSizeClass == .compact ? 2 : 4
+        ),
+        alignment: .leading,
+        spacing: 9
+      ) {
+        metric("field.cpu", value: cpuValue)
+        metric("server.summary.ram", value: memoryValue)
+        metric("title.stacks", value: stackCount.map(String.init))
+        metric("title.containers", value: containerCount.map(String.init))
+      }
+      .padding(.leading, 34)
+
+      if !footer.isEmpty {
+        Text(footer)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .padding(.leading, 34)
+      }
+    }
+    .padding(.vertical, 4)
+    .accessibilityElement(children: .combine)
+  }
+
+  private func metric(_ title: LocalizedStringKey, value: String?) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      Text(value ?? "—")
+        .font(.subheadline.monospacedDigit())
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .accessibilityLabel(value ?? String(localized: "metrics.unavailable"))
+    }
+  }
+}
+
+private enum ServerResourceAction: String, Identifiable {
+  case startAll
+  case restartAll
+  case pauseAll
+  case resumeAll
+  case stopAll
+  case pruneBuildx
+  case pruneSystem
+  case deleteDefinition
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .startAll: String(localized: "action.startAllContainers")
+    case .restartAll: String(localized: "action.restartAllContainers")
+    case .pauseAll: String(localized: "action.pauseAllContainers")
+    case .resumeAll: String(localized: "action.resumeAllContainers")
+    case .stopAll: String(localized: "action.stopAllContainers")
+    case .pruneBuildx: String(localized: "action.pruneBuildx")
+    case .pruneSystem: String(localized: "action.pruneSystem")
+    case .deleteDefinition: String(localized: "action.deleteServer")
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .startAll, .resumeAll: "play.fill"
+    case .restartAll: "arrow.clockwise"
+    case .pauseAll: "pause.fill"
+    case .stopAll: "stop.fill"
+    case .pruneBuildx: "hammer"
+    case .pruneSystem, .deleteDefinition: "trash"
+    }
+  }
+
+  var isDestructive: Bool {
+    self == .stopAll || self == .pruneSystem || self == .deleteDefinition
   }
 }
 
 struct ServerDetailView: View {
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let summary: ServerListItem
   let profile: ServerProfile
@@ -407,45 +920,93 @@ struct ServerDetailView: View {
   @State private var containers: [ContainerListItem] = []
   @State private var stacks: [StackListItem] = []
   @State private var errorMessage: String?
+  @State private var metricsErrorMessage: String?
+  @State private var stacksErrorMessage: String?
+  @State private var containersErrorMessage: String?
   @State private var historyErrorMessage: String?
   @State private var isLoadingDetails = true
   @State private var isLoadingMetrics = true
   @State private var isLoadingStacks = true
   @State private var isLoadingContainers = true
   @State private var isLoadingHistory = true
-  @State private var showingEditor = false
-  @State private var confirmsDelete = false
-  @State private var isDeleting = false
+  @State private var editingServer: ServerDetail?
+  @State private var pendingAction: ServerResourceAction?
+  @State private var activeAction: ServerResourceAction?
+  @State private var actionError: String?
+  @State private var actionNotice: String?
+  @State private var showsAllStacks = false
+  @State private var showsAllContainers = false
   @State private var granularity = "15-min"
 
   var body: some View {
     List {
       if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
       Section("section.overview") {
+        if let actionNotice {
+          Label(actionNotice, systemImage: "paperplane")
+            .foregroundStyle(.secondary)
+        }
         LabeledContent("field.status", value: localizedServerState(serverState ?? summary.info.state))
         if let version = summary.info.version { LabeledContent("field.version", value: version) }
-        if let config = server?.config {
-          LabeledContent("field.address", value: config.address)
-          if !config.region.isEmpty { LabeledContent("field.region", value: config.region) }
+        if let overviewAddress { LabeledContent("field.address", value: overviewAddress) }
+        if let publicIP = nonEmpty(summary.info.publicIP) {
+          LabeledContent("field.publicIP", value: publicIP)
         }
+        if let overviewRegion { LabeledContent("field.region", value: overviewRegion) }
       }
       if let stats {
         Section("section.currentMetrics") {
-          MetricRow(title: "field.cpu", value: stats.cpuPercent, unit: "%")
-          MetricRow(title: "field.memory", value: stats.memoryUsedGB, total: stats.memoryTotalGB, unit: "GB")
-          LabeledContent("field.loadAverage", value: String(format: "%.2f · %.2f · %.2f", stats.loadAverage.one, stats.loadAverage.five, stats.loadAverage.fifteen))
-          LabeledContent("field.networkIn", value: ByteCountFormatter.string(fromByteCount: stats.networkIngressBytes, countStyle: .file))
-          LabeledContent("field.networkOut", value: ByteCountFormatter.string(fromByteCount: stats.networkEgressBytes, countStyle: .file))
-          if !stats.pollingRate.isEmpty { LabeledContent("field.pollingRate", value: stats.pollingRate) }
-          if stats.refreshTimestamp > 0 {
-            LabeledContent("field.lastMeasurement", value: measurementDate(stats.refreshTimestamp).formatted(date: .abbreviated, time: .standard))
+          if let metricsErrorMessage {
+            Label(metricsErrorMessage, systemImage: "exclamationmark.triangle")
+              .font(.caption)
+              .foregroundStyle(.secondary)
           }
-          ForEach(stats.disks) { disk in
-            MetricRow(title: LocalizedStringKey(disk.mount), value: disk.usedGB, total: disk.totalGB, unit: "GB")
+          if stats.availableFields.contains("cpu_perc") {
+            MetricRow(title: "field.cpu", value: stats.cpuPercent, unit: "%")
+          } else {
+            LabeledContent("field.cpu", value: String(localized: "metrics.unavailable"))
+          }
+          if stats.availableFields.contains("mem_used_gb"), stats.availableFields.contains("mem_total_gb") {
+            MetricRow(title: "field.memory", value: stats.memoryUsedGB, total: stats.memoryTotalGB, unit: "GB")
+          } else {
+            LabeledContent("field.memory", value: String(localized: "metrics.unavailable"))
+          }
+          if stats.availableFields.contains("load_average") {
+            LabeledContent("field.loadAverage", value: String(format: "%.2f · %.2f · %.2f", stats.loadAverage.one, stats.loadAverage.five, stats.loadAverage.fifteen))
+          } else {
+            LabeledContent("field.loadAverage", value: String(localized: "metrics.unavailable"))
+          }
+          if stats.availableFields.contains("network_ingress_bytes") {
+            LabeledContent("field.networkIn", value: ByteCountFormatter.string(fromByteCount: stats.networkIngressBytes, countStyle: .file))
+          } else {
+            LabeledContent("field.networkIn", value: String(localized: "metrics.unavailable"))
+          }
+          if stats.availableFields.contains("network_egress_bytes") {
+            LabeledContent("field.networkOut", value: ByteCountFormatter.string(fromByteCount: stats.networkEgressBytes, countStyle: .file))
+          } else {
+            LabeledContent("field.networkOut", value: String(localized: "metrics.unavailable"))
+          }
+          if stats.availableFields.contains("disks") {
+            ForEach(stats.disks) { disk in
+              MetricRow(title: LocalizedStringKey(disk.mount), value: disk.usedGB, total: disk.totalGB, unit: "GB")
+            }
+          } else {
+            LabeledContent("field.disk", value: String(localized: "metrics.unavailable"))
+          }
+          if statsAreStale(stats) {
+            Label("message.metricsStale", systemImage: "clock.badge.exclamationmark")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            if stats.refreshTimestamp > 0 {
+              LabeledContent("field.lastMeasurement", value: measurementDate(stats.refreshTimestamp).formatted(date: .abbreviated, time: .standard))
+            }
           }
         }
       } else if !isLoadingMetrics {
-        Section("section.currentMetrics") { Text("message.metricsUnavailable").foregroundStyle(.secondary) }
+        Section("section.currentMetrics") {
+          Text(metricsErrorMessage ?? String(localized: "message.metricsUnavailable"))
+            .foregroundStyle(.secondary)
+        }
       } else {
         Section("section.currentMetrics") { CenteredLoadingRow("status.loadingMetrics") }
       }
@@ -465,13 +1026,24 @@ struct ServerDetailView: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .multilineTextAlignment(.center)
         } else {
-          Chart(history) { point in
-            LineMark(x: .value("Time", measurementDate(point.timestamp)),
-                     y: .value("CPU", point.cpuPercent))
-              .foregroundStyle(.green)
+          if historyContainsCPU {
+            Chart(history) { point in
+              if point.availableFields.contains("cpu_perc"), point.availableFields.contains("ts") {
+                LineMark(x: .value("Time", measurementDate(point.timestamp)),
+                         y: .value("CPU", point.cpuPercent))
+                  .foregroundStyle(.green)
+              }
+            }
+            .chartYAxisLabel("CPU %")
+            .frame(minHeight: 180)
+          } else {
+            LabeledContent("field.cpu", value: String(localized: "metrics.unavailable"))
           }
-          .chartYAxisLabel("CPU %")
-          .frame(minHeight: 180)
+          if historyIsStale {
+            Label("message.metricsStale", systemImage: "clock.badge.exclamationmark")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
           if isLoadingHistory {
             ProgressView()
               .controlSize(.small)
@@ -487,10 +1059,13 @@ struct ServerDetailView: View {
       Section("title.stacks") {
         if isLoadingStacks, stacks.isEmpty {
           CenteredLoadingRow("status.loadingStacks")
+        } else if let stacksErrorMessage, stacks.isEmpty {
+          Label(stacksErrorMessage, systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.secondary)
         } else if stacks.isEmpty {
           Text("message.noStacks").foregroundStyle(.secondary)
         }
-        ForEach(stacks) { stack in
+        ForEach(stacks.prefix(showsAllStacks ? stacks.count : 3)) { stack in
           NavigationLink {
             StackDetailView(
               summary: stack,
@@ -501,14 +1076,32 @@ struct ServerDetailView: View {
               .environmentObject(liveUpdates)
           } label: { Text(stack.name) }
         }
+        if stacks.count > 3 {
+          Button {
+            withAnimation { showsAllStacks.toggle() }
+          } label: {
+            Label(
+              showsAllStacks ? "action.showFewerStacks" : "action.showMoreStacks",
+              systemImage: showsAllStacks ? "chevron.up" : "chevron.down"
+            )
+          }
+          .accessibilityIdentifier("server-stacks-toggle")
+        }
+        if let stacksErrorMessage, !stacks.isEmpty {
+          Label(stacksErrorMessage, systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.secondary)
+        }
       }
       Section("title.containers") {
         if isLoadingContainers, containers.isEmpty {
           CenteredLoadingRow("status.loadingContainers")
+        } else if let containersErrorMessage, containers.isEmpty {
+          Label(containersErrorMessage, systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.secondary)
         } else if containers.isEmpty {
           Text("message.noContainers").foregroundStyle(.secondary)
         }
-        ForEach(containers) { container in
+        ForEach(containers.prefix(showsAllContainers ? containers.count : 3)) { container in
           NavigationLink {
             ContainerDetailView(
               container: container,
@@ -519,60 +1112,79 @@ struct ServerDetailView: View {
               .environmentObject(liveUpdates)
           } label: { ContainerRow(container: container) }
         }
+        if containers.count > 3 {
+          Button {
+            withAnimation { showsAllContainers.toggle() }
+          } label: {
+            Label(
+              showsAllContainers ? "action.showFewerContainers" : "action.showMoreContainers",
+              systemImage: showsAllContainers ? "chevron.up" : "chevron.down"
+            )
+          }
+          .accessibilityIdentifier("server-containers-toggle")
+        }
+        if let containersErrorMessage, !containers.isEmpty {
+          Label(containersErrorMessage, systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.secondary)
+        }
       }
     }
+    .refreshable { await load() }
     .navigationTitle(server?.name ?? summary.name)
     .toolbar {
-      ToolbarItemGroup {
-        Button("action.edit", systemImage: "pencil") { showingEditor = true }.disabled(server == nil)
+      ToolbarItemGroup(placement: .primaryAction) {
+        ServerActionMenu(
+          containerActions: availableContainerActions,
+          canOperate: !isLoadingContainers && containersErrorMessage == nil
+            && (serverState ?? summary.info.state) == .ok,
+          canMaintain: (serverState ?? summary.info.state) == .ok,
+          isEnabled: server != nil && !isLoadingDetails && !isLoadingStacks && !isLoadingContainers,
+          activeAction: activeAction,
+          edit: { editingServer = server },
+          perform: { pendingAction = $0 }
+        )
         LiveConnectionStatusButton(
           profile: profile,
           keychainStore: keychainStore,
           appSettings: appSettings
         )
-        Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }.disabled(isLoading)
-        Menu("action.more", systemImage: "ellipsis.circle") {
-          Button("action.deleteServer", systemImage: "trash", role: .destructive) {
-            confirmsDelete = true
-          }
-        }
-        .disabled(isLoading || isDeleting)
+        #if os(macOS)
+        Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
+          .disabled(isLoading || activeAction != nil)
+          .keyboardShortcut("r", modifiers: .command)
+        #endif
       }
     }
     .confirmationDialog(
-      "confirm.deleteServer.title",
-      isPresented: $confirmsDelete,
-      titleVisibility: .visible
-    ) {
-      Button("action.deleteServer", role: .destructive) {
-        Task { await deleteServer() }
+      pendingAction?.title ?? String(localized: "title.serverActions"),
+      isPresented: confirmsAction,
+      titleVisibility: .visible,
+      presenting: pendingAction
+    ) { action in
+      Button(action.title, role: action.isDestructive ? .destructive : nil) {
+        Task { await runAction(action) }
       }
       Button("action.cancel", role: .cancel) {}
-    } message: {
-      Text(String(
-        format: String(localized: "confirm.deleteServer.message"),
-        stacks.count,
-        containers.count
-      ))
+    } message: { action in
+      Text(confirmationMessage(for: action))
     }
-    .sheet(isPresented: $showingEditor) {
-      if let server {
-        NavigationStack {
-          ServerEditorView(profile: profile, keychainStore: keychainStore, server: server) {
-            showingEditor = false
-            Task { await load() }
-          }
+    .alert("alert.actionFailed", isPresented: showsActionError) {
+      Button("action.ok") { actionError = nil }
+    } message: {
+      Text(actionError ?? String(localized: "error.unknown"))
+    }
+    .sheet(item: $editingServer) { selectedServer in
+      NavigationStack {
+        ServerEditorView(profile: profile, keychainStore: keychainStore, server: selectedServer, summary: summary) {
+          editingServer = nil
+          Task { await load() }
         }
       }
     }
     .task(id: summary.id) { await load() }
     .task(id: granularity) { await loadHistory() }
-    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
-      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
-        guard !Task.isCancelled else { return }
-        await load(showProgress: false)
-      }
+    .onChange(of: liveUpdates.metricsRefreshGeneration) { _, _ in
+      Task { await refreshMetrics() }
     }
     .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
       if event.affects(.server, id: summary.id) { Task { await load(showProgress: false) } }
@@ -580,6 +1192,20 @@ struct ServerDetailView: View {
     .onChange(of: liveUpdates.refreshGeneration) { _, _ in
       Task { await load(showProgress: false) }
     }
+  }
+
+  private var overviewAddress: String? {
+    nonEmpty(server?.config.address) ?? nonEmpty(summary.info.address)
+  }
+
+  private var overviewRegion: String? {
+    nonEmpty(server?.config.region) ?? nonEmpty(summary.info.region)
+  }
+
+  private func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !trimmed.isEmpty else { return nil }
+    return trimmed
   }
 
   @MainActor private func load(showProgress: Bool = true) async {
@@ -597,7 +1223,30 @@ struct ServerDetailView: View {
       async let relatedContainers: Void = loadContainers(using: client)
       async let historyResult: Void = loadHistory(using: client, showProgress: showProgress)
       _ = await (details, metrics, relatedStacks, relatedContainers, historyResult)
-    } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+    } catch is CancellationError {} catch {
+      errorMessage = error.localizedDescription
+      isLoadingDetails = false
+      isLoadingMetrics = false
+      isLoadingStacks = false
+      isLoadingContainers = false
+      isLoadingHistory = false
+      if stats == nil { metricsErrorMessage = error.localizedDescription }
+      if stacks.isEmpty { stacksErrorMessage = error.localizedDescription }
+      if containers.isEmpty { containersErrorMessage = error.localizedDescription }
+      if history.isEmpty { historyErrorMessage = error.localizedDescription }
+    }
+  }
+
+  @MainActor private func refreshMetrics() async {
+    do {
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      async let current: Void = loadMetrics(using: client)
+      async let historical: Void = loadHistory(using: client, showProgress: false)
+      _ = await (current, historical)
+    } catch is CancellationError {} catch {
+      metricsErrorMessage = error.localizedDescription
+      historyErrorMessage = error.localizedDescription
+    }
   }
 
   @MainActor private func loadDetails(using client: KomodoAPIClient) async {
@@ -610,24 +1259,46 @@ struct ServerDetailView: View {
       errorMessage = nil
     } catch is CancellationError {} catch {
       errorMessage = error.localizedDescription
+      server = nil
       serverState = summary.info.state
     }
   }
 
   @MainActor private func loadMetrics(using client: KomodoAPIClient) async {
     defer { isLoadingMetrics = false }
-    stats = try? await client.getSystemStats(server: summary.id)
+    do {
+      stats = try await client.getSystemStats(server: summary.id)
+      metricsErrorMessage = nil
+    } catch is CancellationError {
+      return
+    } catch {
+      metricsErrorMessage = error.localizedDescription
+    }
   }
 
   @MainActor private func loadStacks(using client: KomodoAPIClient) async {
     defer { isLoadingStacks = false }
-    let allStacks = (try? await client.listStacks()) ?? []
-    stacks = allStacks.filter { $0.info.serverName == summary.name }
+    do {
+      let allStacks = try await client.listStacks()
+      stacks = allStacks.filter { $0.info.serverName == summary.name }
+      stacksErrorMessage = nil
+    } catch is CancellationError {
+      return
+    } catch {
+      stacksErrorMessage = error.localizedDescription
+    }
   }
 
   @MainActor private func loadContainers(using client: KomodoAPIClient) async {
     defer { isLoadingContainers = false }
-    containers = (try? await client.listContainers(server: summary.id)) ?? []
+    do {
+      containers = try await client.listContainers(server: summary.id)
+      containersErrorMessage = nil
+    } catch is CancellationError {
+      return
+    } catch {
+      containersErrorMessage = error.localizedDescription
+    }
   }
 
   @MainActor private func loadHistory(
@@ -668,24 +1339,111 @@ struct ServerDetailView: View {
   }
 
   private func measurementDate(_ timestamp: Int64) -> Date {
-    Date(timeIntervalSince1970: TimeInterval(timestamp) / (timestamp > 10_000_000_000 ? 1_000 : 1))
+    MetricFreshness.measurementDate(for: timestamp)
+  }
+
+  private func statsAreStale(_ stats: SystemStats) -> Bool {
+    let staleAfter = max(300, appSettings.metricsRefreshInterval.rawValue * 3)
+    return MetricFreshness.isStale(
+      timestamp: stats.refreshTimestamp,
+      after: TimeInterval(staleAfter)
+    )
+  }
+
+  private var historyContainsCPU: Bool {
+    history.contains {
+      $0.availableFields.contains("cpu_perc") && $0.availableFields.contains("ts")
+    }
+  }
+
+  private var historyIsStale: Bool {
+    guard let latestTimestamp = history
+      .filter({ $0.availableFields.contains("cpu_perc") && $0.availableFields.contains("ts") })
+      .map(\.timestamp)
+      .max() else { return false }
+    let expectedInterval: TimeInterval = switch granularity {
+    case "1-hr": 3_600
+    case "1-day": 86_400
+    default: 900
+    }
+    return MetricFreshness.isStale(timestamp: latestTimestamp, after: max(300, expectedInterval * 2))
   }
 
   private var isLoading: Bool {
-    isLoadingDetails || isLoadingMetrics || isLoadingStacks || isLoadingContainers || isDeleting
+    isLoadingDetails || isLoadingMetrics || isLoadingStacks || isLoadingContainers
   }
 
-  @MainActor
-  private func deleteServer() async {
-    isDeleting = true
-    defer { isDeleting = false }
+  private var availableContainerActions: [ServerResourceAction] {
+    let states = Set(containers.map { $0.state.lowercased() })
+    let hasRunning = !states.isDisjoint(with: ["running", "healthy", "unhealthy", "restarting"])
+    let hasPaused = states.contains("paused")
+    let hasStopped = !states.isDisjoint(with: ["created", "exited", "stopped", "dead"])
+    var actions: [ServerResourceAction] = []
+    if hasRunning || hasPaused { actions.append(.restartAll) }
+    if hasRunning { actions.append(.pauseAll) }
+    if hasPaused { actions.append(.resumeAll) }
+    if hasRunning || hasPaused { actions.append(.stopAll) }
+    if hasStopped { actions.append(.startAll) }
+    return actions
+  }
+
+  private var confirmsAction: Binding<Bool> {
+    Binding(
+      get: { pendingAction != nil },
+      set: { if !$0 { pendingAction = nil } }
+    )
+  }
+
+  private var showsActionError: Binding<Bool> {
+    Binding(
+      get: { actionError != nil },
+      set: { if !$0 { actionError = nil } }
+    )
+  }
+
+  private func confirmationMessage(for action: ServerResourceAction) -> String {
+    let name = server?.name ?? summary.name
+    return switch action {
+    case .stopAll:
+      String(format: String(localized: "confirm.stopAllContainers.message"), name, containers.count)
+    case .pruneBuildx:
+      String(format: String(localized: "confirm.pruneBuildx.message"), name)
+    case .pruneSystem:
+      String(format: String(localized: "confirm.pruneSystem.message"), name)
+    case .deleteDefinition:
+      String(format: String(localized: "confirm.deleteServer.message"), stacks.count, containers.count)
+    default:
+      String(format: String(localized: "confirm.serverContainerAction.message"), name, containers.count)
+    }
+  }
+
+  @MainActor private func runAction(_ action: ServerResourceAction) async {
+    pendingAction = nil
+    guard activeAction == nil else { return }
+    actionNotice = nil
+    activeAction = action
+    defer { activeAction = nil }
     do {
-      _ = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-        .deleteServer(idOrName: summary.id)
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      switch action {
+      case .startAll: _ = try await client.startAllContainers(server: summary.id)
+      case .restartAll: _ = try await client.restartAllContainers(server: summary.id)
+      case .pauseAll: _ = try await client.pauseAllContainers(server: summary.id)
+      case .resumeAll: _ = try await client.unpauseAllContainers(server: summary.id)
+      case .stopAll: _ = try await client.stopAllContainers(server: summary.id)
+      case .pruneBuildx: _ = try await client.pruneBuildx(server: summary.id)
+      case .pruneSystem: _ = try await client.pruneSystem(server: summary.id)
+      case .deleteDefinition:
+        _ = try await client.deleteServer(idOrName: summary.id)
+        liveUpdates.requestRefresh()
+        dismiss()
+        return
+      }
+      actionNotice = String(format: String(localized: "status.serverActionSubmitted"), action.title)
       liveUpdates.requestRefresh()
-      dismiss()
+      await load(showProgress: false)
     } catch {
-      errorMessage = error.localizedDescription
+      actionError = error.localizedDescription
     }
   }
 
@@ -695,6 +1453,62 @@ struct ServerDetailView: View {
     case .notOk: String(localized: "serverState.notOk")
     case .disabled: String(localized: "serverState.disabled")
     case .unknown: String(localized: "serverState.unavailable")
+    }
+  }
+}
+
+private struct ServerActionMenu: View {
+  let containerActions: [ServerResourceAction]
+  let canOperate: Bool
+  let canMaintain: Bool
+  let isEnabled: Bool
+  let activeAction: ServerResourceAction?
+  let edit: () -> Void
+  let perform: (ServerResourceAction) -> Void
+
+  var body: some View {
+    Menu {
+      Button("action.edit", systemImage: "pencil", action: edit)
+        .accessibilityIdentifier("server-edit-button")
+
+      if !containerActions.isEmpty {
+        Section("section.operationActions") {
+          ForEach(containerActions) { action in
+            actionButton(action)
+              .disabled(!canOperate)
+          }
+        }
+      }
+
+      Section("section.maintenanceActions") {
+        actionButton(.pruneBuildx)
+          .disabled(!canMaintain)
+        actionButton(.pruneSystem)
+          .disabled(!canMaintain)
+      }
+
+      Section("section.destructiveActions") {
+        actionButton(.deleteDefinition)
+      }
+    } label: {
+      if let activeAction {
+        ProgressView()
+          .controlSize(.small)
+          .accessibilityLabel(activeAction.title)
+      } else {
+        Label("title.serverActions", systemImage: "ellipsis.circle")
+      }
+    }
+    .disabled(!isEnabled || activeAction != nil)
+    .accessibilityLabel(activeAction?.title ?? String(localized: "title.serverActions"))
+    .accessibilityIdentifier("server-actions-menu")
+  }
+
+  private func actionButton(_ action: ServerResourceAction) -> some View {
+    Button(role: action.isDestructive ? .destructive : nil) {
+      perform(action)
+    } label: {
+      Label(action.title, systemImage: action.symbol)
     }
   }
 }
@@ -739,6 +1553,46 @@ struct MetricRow: View {
   }
 }
 
+private enum ContainerStateFilter: String, CaseIterable, Identifiable {
+  case all
+  case running
+  case paused
+  case stopped
+  case attention
+  case other
+
+  var id: Self { self }
+
+  var title: LocalizedStringKey {
+    switch self {
+    case .all: "filter.allStates"
+    case .running: "state.running"
+    case .paused: "state.paused"
+    case .stopped: "state.stopped"
+    case .attention: "filter.attention"
+    case .other: "filter.otherStates"
+    }
+  }
+
+  func includes(_ state: String) -> Bool {
+    switch self {
+    case .all: return true
+    case .running: return ResourceStateCategory(state) == .running
+    case .paused: return ResourceStateCategory(state) == .paused
+    case .stopped: return ResourceStateCategory(state) == .stopped
+    case .attention: return ResourceStateCategory(state) == .attention
+    case .other:
+      let category = ResourceStateCategory(state)
+      return category == .other || category == .transitioning
+    }
+  }
+}
+
+private struct ContainerServerOption: Identifiable {
+  let id: String
+  let name: String
+}
+
 struct ContainerListView: View {
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let profile: ServerProfile
@@ -746,25 +1600,76 @@ struct ContainerListView: View {
   @ObservedObject var appSettings: AppSettings
   @State private var containers: [ContainerListItem] = []
   @State private var searchText = ""
+  @State private var stateFilter: ContainerStateFilter = .all
+  @State private var selectedServerID = ""
+  @State private var publishedPortsOnly = false
+  @State private var loadGeneration = 0
   @State private var errorMessage: String?
   @State private var isLoading = true
+
+  private let pageSize = 100
 
   var body: some View {
     Group {
       if isLoading, containers.isEmpty { ProgressView("status.loadingContainers") }
       else if let errorMessage, containers.isEmpty {
-        ContentUnavailableView("title.containersUnavailable", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
+        ContentUnavailableView {
+          Label("title.containersUnavailable", systemImage: "exclamationmark.triangle")
+        } description: {
+          Text(errorMessage)
+        } actions: {
+          Button("action.retry") { Task { await load() } }
+        }
       } else {
-        List(filteredContainers) { container in
-          NavigationLink {
-            ContainerDetailView(
-              container: container,
-              profile: profile,
-              keychainStore: keychainStore,
-              appSettings: appSettings
+        List {
+          Section {
+            if filteredContainers.isEmpty {
+              if containers.isEmpty {
+                ContentUnavailableView(
+                  "message.noContainers",
+                  systemImage: "shippingbox",
+                  description: Text("message.noContainers.description")
+                )
+              } else if hasActiveFilters {
+                ContentUnavailableView {
+                  Label("message.noContainersMatchFilters", systemImage: "line.3.horizontal.decrease.circle")
+                } actions: {
+                  Button(emptyResetTitle) {
+                    resetFilters()
+                    searchText = ""
+                  }
+                }
+              } else {
+                ContentUnavailableView.search(text: searchText)
+              }
+            } else {
+              ForEach(filteredContainers) { container in
+                NavigationLink {
+                  ContainerDetailView(
+                    container: container,
+                    profile: profile,
+                    keychainStore: keychainStore,
+                    appSettings: appSettings
+                  )
+                    .environmentObject(liveUpdates)
+                } label: { ContainerRow(container: container) }
+                  .accessibilityIdentifier("container-list-item-\(container.id ?? container.name)")
+              }
+            }
+            if let errorMessage {
+              Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.secondary)
+            }
+          } header: {
+            ResourceStatusSummary(
+              counts: overviewCounts,
+              isStale: errorMessage != nil,
+              showTotal: { selectOverviewFilter(.all) },
+              showActive: { selectOverviewFilter(.running) },
+              showProblems: { selectOverviewFilter(.attention) }
             )
-              .environmentObject(liveUpdates)
-          } label: { ContainerRow(container: container) }
+            .textCase(nil)
+          }
         }
         .refreshable { await load() }
       }
@@ -774,16 +1679,48 @@ struct ContainerListView: View {
     .searchable(text: $searchText, prompt: "action.searchContainers")
     .toolbar {
       ToolbarItemGroup(placement: .primaryAction) {
+        Menu {
+          Picker("filter.resourceState", selection: $stateFilter) {
+            ForEach(ContainerStateFilter.allCases) { filter in
+              Text(filter.title).tag(filter)
+            }
+          }
+          if !availableServers.isEmpty {
+            Picker("field.server", selection: $selectedServerID) {
+              Text("filter.allServers").tag("")
+              ForEach(availableServers) { server in
+                Text(server.name).tag(server.id)
+              }
+            }
+          }
+          Toggle("filter.publishedPorts", isOn: $publishedPortsOnly)
+          if hasActiveFilters {
+            Button("filter.reset") { resetFilters() }
+          }
+        } label: {
+          Label(
+            "filter.containers",
+            systemImage: hasActiveFilters
+              ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
+          )
+        }
         LiveConnectionStatusButton(
           profile: profile,
           keychainStore: keychainStore,
           appSettings: appSettings
         )
+        #if os(macOS)
         Button("action.refresh", systemImage: "arrow.clockwise") { Task { await load() } }
           .disabled(isLoading)
+          .keyboardShortcut("r", modifiers: .command)
+        #endif
       }
     }
-    .task(id: profile.id) { await load() }
+    .task(id: profile.id) {
+      containers = []
+      resetFilters()
+      await load()
+    }
     .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
       if event.affects(.stack) || event.affects(.server) || event.affects(.deployment) {
         Task { await load() }
@@ -795,20 +1732,88 @@ struct ContainerListView: View {
   }
 
   private var filteredContainers: [ContainerListItem] {
-    guard !searchText.isEmpty else { return containers }
-    return containers.filter { $0.name.localizedCaseInsensitiveContains(searchText)
-      || ($0.image?.localizedCaseInsensitiveContains(searchText) == true)
-      || ($0.serverName?.localizedCaseInsensitiveContains(searchText) == true) }
+    containers.filter { container in
+      stateFilter.includes(container.state)
+        && (selectedServerID.isEmpty || serverKey(for: container) == selectedServerID)
+        && (!publishedPortsOnly || container.ports.contains { $0.publicPort != nil })
+        && (searchText.isEmpty
+          || container.name.localizedCaseInsensitiveContains(searchText)
+          || (container.image?.localizedCaseInsensitiveContains(searchText) == true)
+          || (container.serverName?.localizedCaseInsensitiveContains(searchText) == true))
+    }
+  }
+
+  private var overviewCounts: ResourceOverviewCounts {
+    ResourceOverviewCounts(states: containers.map(\.state))
+  }
+
+  private func selectOverviewFilter(_ filter: ContainerStateFilter) {
+    searchText = ""
+    resetFilters()
+    stateFilter = filter
+  }
+
+  private var availableServers: [ContainerServerOption] {
+    var namesByID: [String: String] = [:]
+    for container in containers {
+      let id = serverKey(for: container)
+      if !id.isEmpty {
+        namesByID[id] = container.serverName.flatMap { $0.isEmpty ? nil : $0 } ?? id
+      }
+    }
+    if !selectedServerID.isEmpty, namesByID[selectedServerID] == nil {
+      namesByID[selectedServerID] = selectedServerID
+    }
+    return namesByID.map { ContainerServerOption(id: $0.key, name: $0.value) }
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+  }
+
+  private var hasActiveFilters: Bool {
+    stateFilter != .all || !selectedServerID.isEmpty || publishedPortsOnly
+  }
+
+  private var emptyResetTitle: LocalizedStringKey {
+    searchText.isEmpty ? "filter.reset" : "filter.resetAll"
+  }
+
+  private func serverKey(for container: ContainerListItem) -> String {
+    if let serverID = container.serverID, !serverID.isEmpty { return serverID }
+    return container.serverName ?? ""
+  }
+
+  private func resetFilters() {
+    stateFilter = .all
+    selectedServerID = ""
+    publishedPortsOnly = false
   }
 
   @MainActor private func load() async {
+    loadGeneration += 1
+    let generation = loadGeneration
     isLoading = true
-    defer { isLoading = false }
     do {
-      containers = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-        .listAllContainers()
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      var loadedContainers: [ContainerListItem] = []
+      var page = 0
+      while true {
+        guard generation == loadGeneration else { return }
+        let batch = try await client.listAllContainers(page: page, limit: pageSize)
+        try Task.checkCancellation()
+        guard generation == loadGeneration else { return }
+        loadedContainers.append(contentsOf: batch)
+        if batch.count < pageSize { break }
+        page += 1
+      }
+      guard generation == loadGeneration else { return }
+      containers = loadedContainers
       errorMessage = nil
-    } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+    } catch is CancellationError {
+      return
+    } catch {
+      guard generation == loadGeneration else { return }
+      errorMessage = error.localizedDescription
+    }
+    if generation == loadGeneration { isLoading = false }
   }
 }
 
@@ -867,7 +1872,6 @@ private enum ContainerResourceAction: String, Identifiable {
 
 struct ContainerDetailView: View {
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   let container: ContainerListItem
   let profile: ServerProfile
@@ -879,6 +1883,7 @@ struct ContainerDetailView: View {
   @State private var activeAction: ContainerResourceAction?
   @State private var pendingAction: ContainerResourceAction?
   @State private var actionError: String?
+  @State private var showsAllPorts = false
 
   var body: some View {
     List {
@@ -890,29 +1895,65 @@ struct ContainerDetailView: View {
       }
       if let stats = displayedContainer.stats {
         Section("section.currentMetrics") {
-          LabeledContent("field.cpu") {
-            Text(String(
-              format: String(localized: "metrics.cpuWithCores"),
-              stats.cpuPercent,
-              stats.cpuCoreEquivalent
-            ))
+          if stats.availableFields.contains("cpu_perc") {
+            LabeledContent("field.cpu") {
+              Text(String(
+                format: String(localized: "metrics.cpuWithCores"),
+                stats.cpuPercent,
+                stats.cpuCoreEquivalent
+              ))
+            }
+          } else {
+            LabeledContent("field.cpu", value: String(localized: "metrics.unavailable"))
           }
-          LabeledContent("field.memory", value: stats.memoryUsage)
-          if stats.memoryPercent > 0 {
+          LabeledContent(
+            "field.memory",
+            value: stats.availableFields.contains("mem_usage")
+              ? stats.memoryUsage : String(localized: "metrics.unavailable")
+          )
+          if stats.availableFields.contains("mem_perc") {
             LabeledContent(
               "field.memoryPercent",
               value: String(format: "%.1f %%", stats.memoryPercent)
             )
+          } else {
+            LabeledContent("field.memoryPercent", value: String(localized: "metrics.unavailable"))
           }
-          LabeledContent("field.networkIO", value: stats.networkIO)
-          LabeledContent("field.blockIO", value: stats.blockIO)
-          LabeledContent("field.processes", value: String(stats.processCount))
+          LabeledContent(
+            "field.networkIO",
+            value: stats.availableFields.contains("net_io")
+              ? stats.networkIO : String(localized: "metrics.unavailable")
+          )
+          LabeledContent(
+            "field.blockIO",
+            value: stats.availableFields.contains("block_io")
+              ? stats.blockIO : String(localized: "metrics.unavailable")
+          )
+          LabeledContent(
+            "field.processes",
+            value: stats.availableFields.contains("pids")
+              ? String(stats.processCount) : String(localized: "metrics.unavailable")
+          )
         }
       }
       if !displayedContainer.ports.isEmpty {
         Section("section.ports") {
-          ForEach(Array(displayedContainer.ports.enumerated()), id: \.offset) { _, port in
+          ForEach(
+            Array(displayedContainer.ports.prefix(showsAllPorts ? displayedContainer.ports.count : 3).enumerated()),
+            id: \.offset
+          ) { _, port in
             LabeledContent("\(port.type.uppercased()) \(port.privatePort)", value: port.publicPort.map(String.init) ?? "—")
+          }
+          if displayedContainer.ports.count > 3 {
+            Button {
+              withAnimation { showsAllPorts.toggle() }
+            } label: {
+              Label(
+                showsAllPorts ? "action.showFewerPorts" : "action.showMorePorts",
+                systemImage: showsAllPorts ? "chevron.up" : "chevron.down"
+              )
+            }
+            .accessibilityIdentifier("container-ports-toggle")
           }
         }
       }
@@ -931,24 +1972,17 @@ struct ContainerDetailView: View {
           } label: {
             Label("action.openContainerLogs", systemImage: "doc.text.magnifyingglass")
           }
+          .accessibilityIdentifier("container-logs-link")
         } else {
           Label("message.logsUnavailable", systemImage: "doc.text.magnifyingglass")
             .foregroundStyle(.secondary)
         }
       }
     }
+    .refreshable { await loadMetrics() }
     .navigationTitle(displayedContainer.name)
     .toolbar {
-      ToolbarItemGroup {
-        LiveConnectionStatusButton(
-          profile: profile,
-          keychainStore: keychainStore,
-          appSettings: appSettings
-        )
-        Button("action.refresh", systemImage: "arrow.clockwise") {
-          Task { await loadMetrics() }
-        }
-        .disabled(activeAction != nil)
+      ToolbarItemGroup(placement: .primaryAction) {
         ContainerActionMenu(
           state: displayedContainer.state,
           isEnabled: displayedContainer.serverID != nil,
@@ -957,6 +1991,18 @@ struct ContainerDetailView: View {
           edit: { showingStackEditor = true },
           perform: handleAction
         )
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
+        #if os(macOS)
+        Button("action.refresh", systemImage: "arrow.clockwise") {
+          Task { await loadMetrics() }
+        }
+        .disabled(activeAction != nil)
+        .keyboardShortcut("r", modifiers: .command)
+        #endif
       }
     }
     .confirmationDialog(
@@ -986,13 +2032,9 @@ struct ContainerDetailView: View {
         }
       }
     }
-    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
-      await loadMetrics()
-      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
-        guard !Task.isCancelled else { break }
-        await loadMetrics()
-      }
+    .task(id: container.id) { await loadMetrics() }
+    .onChange(of: liveUpdates.metricsRefreshGeneration) { _, _ in
+      Task { await loadMetrics() }
     }
     .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
       if event.affects(.stack) || event.affects(.server) || event.affects(.deployment) {
@@ -1136,6 +2178,7 @@ private struct ContainerActionMenu: View {
     }
     .disabled(!isEnabled || activeAction != nil)
     .accessibilityLabel(activeAction?.title ?? String(localized: "title.containerActions"))
+    .accessibilityIdentifier("container-actions-menu")
   }
 
   private func actionButton(_ action: ContainerResourceAction) -> some View {
@@ -1156,10 +2199,23 @@ private struct ContainerActionMenu: View {
   }
 }
 
+@MainActor
+final class EditorSaveGate: ObservableObject {
+  @Published private(set) var isSaving = false
+
+  func perform(_ operation: () async throws -> Void) async throws {
+    guard !isSaving else { return }
+    isSaving = true
+    defer { isSaving = false }
+    try await operation()
+  }
+}
+
 struct ServerEditorView: View {
   let profile: ServerProfile
   let keychainStore: KeychainStore
   let server: ServerDetail?
+  let summary: ServerListItem?
   let onSaved: () -> Void
   @Environment(\.dismiss) private var dismiss
   @State private var name: String
@@ -1171,15 +2227,15 @@ struct ServerEditorView: View {
   @State private var autoPrune: Bool
   @State private var statsMonitoring: Bool
   @State private var showingReview = false
-  @State private var isSaving = false
+  @StateObject private var saveGate = EditorSaveGate()
   @State private var errorMessage: String?
 
-  init(profile: ServerProfile, keychainStore: KeychainStore, server: ServerDetail? = nil, onSaved: @escaping () -> Void) {
-    self.profile = profile; self.keychainStore = keychainStore; self.server = server; self.onSaved = onSaved
+  init(profile: ServerProfile, keychainStore: KeychainStore, server: ServerDetail? = nil, summary: ServerListItem? = nil, onSaved: @escaping () -> Void) {
+    self.profile = profile; self.keychainStore = keychainStore; self.server = server; self.summary = summary; self.onSaved = onSaved
     _name = State(initialValue: server?.name ?? "")
-    _address = State(initialValue: server?.config.address ?? "https://")
-    _externalAddress = State(initialValue: server?.config.externalAddress ?? "")
-    _region = State(initialValue: server?.config.region ?? "")
+    _address = State(initialValue: Self.originalAddress(server: server, summary: summary))
+    _externalAddress = State(initialValue: Self.originalExternalAddress(server: server, summary: summary))
+    _region = State(initialValue: Self.originalRegion(server: server, summary: summary))
     _enabled = State(initialValue: server?.config.enabled ?? true)
     _insecureTLS = State(initialValue: server?.config.insecureTLS ?? false)
     _autoPrune = State(initialValue: server?.config.autoPrune ?? false)
@@ -1188,26 +2244,79 @@ struct ServerEditorView: View {
 
   var body: some View {
     Form {
-      Section("section.identity") { TextField("field.name", text: $name).disabled(server != nil); TextField("field.address", text: $address); TextField("field.externalAddress", text: $externalAddress); TextField("field.region", text: $region) }
+      Section {
+        TextField("field.name", text: $name).disabled(server != nil)
+        TextField("field.address", text: $address)
+          .accessibilityIdentifier("server-editor-address-field")
+        TextField("field.externalAddress", text: $externalAddress)
+          .accessibilityIdentifier("server-editor-external-address-field")
+        TextField("field.region", text: $region)
+          .accessibilityIdentifier("server-editor-region-field")
+      } header: {
+        Text("section.identity")
+      } footer: {
+        if server != nil, externalAddress.isEmpty, summary?.info.publicIP != nil {
+          Text("message.serverPublicIPIsNotExternalAddress")
+        }
+      }
       Section("section.behavior") { Toggle("field.enabled", isOn: $enabled); Toggle("field.statsMonitoring", isOn: $statsMonitoring); Toggle("field.autoPrune", isOn: $autoPrune); Toggle("field.insecureTLS", isOn: $insecureTLS) }
+      if !hasEditableConfiguration { Text("message.serverConfigurationIncomplete").foregroundStyle(.secondary) }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
     }
+    .accessibilityIdentifier("server-editor-form")
     .navigationTitle(server == nil ? "title.newServer" : "title.editServer")
     .toolbar {
-      ToolbarItem(placement: .cancellationAction) { Button("action.cancel") { dismiss() }.disabled(isSaving) }
-      ToolbarItem(placement: .confirmationAction) { Button("action.reviewChanges") { showingReview = true }.disabled(!canSave || isSaving) }
+      ToolbarItem(placement: .cancellationAction) { Button("action.cancel") { dismiss() }.disabled(saveGate.isSaving) }
+      ToolbarItem(placement: .confirmationAction) { Button("action.reviewChanges") { showingReview = true }.disabled(!canSave || saveGate.isSaving) }
     }
     .confirmationDialog("confirm.saveChanges.title", isPresented: $showingReview, titleVisibility: .visible) {
       Button("action.save") { Task { await save() } }
       Button("action.cancel", role: .cancel) {}
     } message: { Text(String(format: String(localized: "confirm.saveChanges.fields"), changedFields.joined(separator: ", "))) }
-    .overlay { if isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+    .overlay { if saveGate.isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
   }
 
   private var canSave: Bool {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
-      && (try? ServerAddress(address)) != nil
+      && isValidConnectionAddress
+      && hasEditableConfiguration
       && !changedFields.isEmpty
+  }
+
+  private var isValidConnectionAddress: Bool {
+    let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+    if server != nil && value.isEmpty { return true }
+    let secureURL = value.hasPrefix("wss://")
+      ? "https://" + String(value.dropFirst(6)) : value
+    let normalizedURL = secureURL.hasPrefix("ws://")
+      ? "http://" + String(secureURL.dropFirst(5)) : secureURL
+    return (try? ServerAddress(normalizedURL)) != nil
+  }
+
+  private var hasEditableConfiguration: Bool {
+    guard let server else { return true }
+    let fields = server.config.availableFields
+    let behaviorFields: Set<String> = ["enabled", "insecure_tls", "auto_prune", "stats_monitoring"]
+    return behaviorFields.isSubset(of: fields)
+      && (fields.contains("external_address") || summary?.info.externalAddress != nil)
+  }
+
+  private static func originalAddress(server: ServerDetail?, summary: ServerListItem?) -> String {
+    guard let server else { return "https://" }
+    return server.config.availableFields.contains("address")
+      ? server.config.address : summary?.info.address ?? ""
+  }
+
+  private static func originalExternalAddress(server: ServerDetail?, summary: ServerListItem?) -> String {
+    guard let server else { return "" }
+    return server.config.availableFields.contains("external_address")
+      ? server.config.externalAddress : summary?.info.externalAddress ?? ""
+  }
+
+  private static func originalRegion(server: ServerDetail?, summary: ServerListItem?) -> String {
+    guard let server else { return "" }
+    return server.config.availableFields.contains("region")
+      ? server.config.region : summary?.info.region ?? ""
   }
 
   private var changedFields: [String] {
@@ -1215,9 +2324,9 @@ struct ServerEditorView: View {
       return ["field.name", "field.address", "field.externalAddress", "field.region", "section.behavior"].map { String(localized: String.LocalizationValue($0)) }
     }
     return [
-      old.address == address ? nil : String(localized: "field.address"),
-      old.externalAddress == externalAddress ? nil : String(localized: "field.externalAddress"),
-      old.region == region ? nil : String(localized: "field.region"),
+      Self.originalAddress(server: server, summary: summary) == address ? nil : String(localized: "field.address"),
+      Self.originalExternalAddress(server: server, summary: summary) == externalAddress ? nil : String(localized: "field.externalAddress"),
+      Self.originalRegion(server: server, summary: summary) == region ? nil : String(localized: "field.region"),
       old.enabled == enabled ? nil : String(localized: "field.enabled"),
       old.insecureTLS == insecureTLS ? nil : String(localized: "field.insecureTLS"),
       old.autoPrune == autoPrune ? nil : String(localized: "field.autoPrune"),
@@ -1228,9 +2337,9 @@ struct ServerEditorView: View {
   private var patch: ServerConfigPatch {
     let old = server?.config
     return ServerConfigPatch(
-      address: old?.address == address ? nil : address,
-      externalAddress: old?.externalAddress == externalAddress ? nil : externalAddress,
-      region: old?.region == region ? nil : region,
+      address: Self.originalAddress(server: server, summary: summary) == address ? nil : address,
+      externalAddress: Self.originalExternalAddress(server: server, summary: summary) == externalAddress ? nil : externalAddress,
+      region: Self.originalRegion(server: server, summary: summary) == region ? nil : region,
       enabled: old?.enabled == enabled ? nil : enabled,
       insecureTLS: old?.insecureTLS == insecureTLS ? nil : insecureTLS,
       autoPrune: old?.autoPrune == autoPrune ? nil : autoPrune,
@@ -1239,13 +2348,14 @@ struct ServerEditorView: View {
   }
 
   @MainActor private func save() async {
-    guard !isSaving else { return }; isSaving = true; defer { isSaving = false }
     do {
-      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-      let saved = if let server { try await client.updateServer(id: server.id, config: patch) }
-        else { try await client.createServer(name: name, config: patch) }
-      _ = try await client.getServer(idOrName: saved.id)
-      onSaved()
+      try await saveGate.perform {
+        let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+        let saved = if let server { try await client.updateServer(id: server.id, config: patch) }
+          else { try await client.createServer(name: name, config: patch) }
+        _ = try await client.getServer(idOrName: saved.id)
+        onSaved()
+      }
     } catch { errorMessage = error.localizedDescription }
   }
 }
@@ -1265,7 +2375,7 @@ struct StackEditorView: View {
   @State private var pollForUpdates: Bool
   @State private var autoUpdate: Bool
   @State private var showingReview = false
-  @State private var isSaving = false
+  @StateObject private var saveGate = EditorSaveGate()
   @State private var errorMessage: String?
 
   init(profile: ServerProfile, keychainStore: KeychainStore, stack: StackDetail? = nil, onSaved: @escaping () -> Void) {
@@ -1279,18 +2389,18 @@ struct StackEditorView: View {
   var body: some View {
     Form {
       Section("section.identity") { TextField("field.name", text: $name).disabled(stack != nil); TextField("field.serverID", text: $serverID); TextField("field.project", text: $projectName) }
-      Section("section.repository") { TextField("field.repository", text: $repository); TextField("field.branch", text: $branch); Toggle("field.autoPull", isOn: $autoPull); Toggle("field.pollForUpdates", isOn: $pollForUpdates); Toggle("field.autoUpdate", isOn: $autoUpdate) }
+      Section("section.repository") { TextField("field.repository", text: $repository); TextField("field.branch", text: $branch).accessibilityIdentifier("stack-editor-branch-field"); Toggle("field.autoPull", isOn: $autoPull); Toggle("field.pollForUpdates", isOn: $pollForUpdates); Toggle("field.autoUpdate", isOn: $autoUpdate) }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
     }
     .navigationTitle(stack == nil ? "title.newStack" : "title.editStack")
     .toolbar {
-      ToolbarItem(placement: .cancellationAction) { Button("action.cancel") { dismiss() }.disabled(isSaving) }
-      ToolbarItem(placement: .confirmationAction) { Button("action.reviewChanges") { showingReview = true }.disabled(!canSave || isSaving) }
+      ToolbarItem(placement: .cancellationAction) { Button("action.cancel") { dismiss() }.disabled(saveGate.isSaving) }
+      ToolbarItem(placement: .confirmationAction) { Button("action.reviewChanges") { showingReview = true }.disabled(!canSave || saveGate.isSaving) }
     }
     .confirmationDialog("confirm.saveChanges.title", isPresented: $showingReview, titleVisibility: .visible) {
       Button("action.save") { Task { await save() } }; Button("action.cancel", role: .cancel) {}
     } message: { Text(String(format: String(localized: "confirm.saveChanges.fields"), changedFields.joined(separator: ", "))) }
-    .overlay { if isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+    .overlay { if saveGate.isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
   }
 
   private var canSave: Bool {
@@ -1324,13 +2434,14 @@ struct StackEditorView: View {
   }
 
   @MainActor private func save() async {
-    guard !isSaving else { return }; isSaving = true; defer { isSaving = false }
     do {
-      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
-      let saved = if let stack { try await client.updateStack(id: stack.id, config: patch) }
-        else { try await client.createStack(name: name, config: patch) }
-      _ = try await client.getStack(idOrName: saved.id)
-      onSaved()
+      try await saveGate.perform {
+        let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+        let saved = if let stack { try await client.updateStack(id: stack.id, config: patch) }
+          else { try await client.createStack(name: name, config: patch) }
+        _ = try await client.getStack(idOrName: saved.id)
+        onSaved()
+      }
     } catch { errorMessage = error.localizedDescription }
   }
 }

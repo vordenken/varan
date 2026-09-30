@@ -67,6 +67,114 @@ struct ConnectionEditorView: View {
   }
 
   var body: some View {
+    Group {
+      #if os(macOS)
+      macEditor
+      #else
+      mobileEditor
+      #endif
+    }
+    .navigationTitle(profile == nil ? "title.newConnection" : "title.editConnection")
+    .frame(minWidth: 340, idealWidth: 520, minHeight: 420)
+    .task(id: profile?.id) {
+      await loadStoredCredentials()
+    }
+  }
+
+  #if os(macOS)
+  private var macEditor: some View {
+    GeometryReader { geometry in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          macSection("section.server") {
+            macRow("field.name") {
+              TextField("", text: $profileName, prompt: Text("placeholder.profileName"))
+                .accessibilityLabel("field.name")
+            }
+            Divider()
+            macRow("field.serverAddress") {
+              TextField(
+                "",
+                text: $serverURL,
+                prompt: Text(verbatim: "https://komodo.example.com").foregroundColor(.secondary)
+              )
+              .accessibilityLabel("field.serverAddress")
+            }
+          }
+
+          macSection("section.authentication") {
+            macRow("field.authenticationMethod") {
+              Picker("field.authenticationMethod", selection: $authenticationMode) {
+                ForEach(AuthenticationMode.allCases) { mode in
+                  Text(mode.title).tag(mode)
+                }
+              }
+              .labelsHidden()
+              .pickerStyle(.segmented)
+              .frame(width: 220)
+            }
+            Divider()
+            if authenticationMode == .apiKey {
+              macRow("API-Key") {
+                TextField("", text: $key)
+                  .accessibilityLabel("API-Key")
+              }
+              Divider()
+              macRow("API-Secret") {
+                SecureField("", text: $secret)
+                  .accessibilityLabel("API-Secret")
+              }
+            } else {
+              macRow("JWT") {
+                SecureField("", text: $token)
+                  .accessibilityLabel("JWT")
+              }
+            }
+          }
+
+          VStack(alignment: .leading, spacing: 8) {
+            saveButton
+            statusView
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: min(480, max(300, geometry.size.width - 40)))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+      }
+    }
+  }
+
+  private func macSection<Content: View>(
+    _ title: LocalizedStringKey,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(title)
+        .font(.headline)
+        .padding(.leading, 12)
+      VStack(spacing: 0, content: content)
+        .padding(.horizontal, 16)
+        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+    }
+  }
+
+  private func macRow<Content: View>(
+    _ title: LocalizedStringKey,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    HStack(spacing: 12) {
+      Text(title)
+        .frame(width: 112, alignment: .leading)
+      content()
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .frame(minHeight: 48)
+  }
+  #else
+  private var mobileEditor: some View {
     Form {
       Section("section.server") {
         TextField("field.name", text: $profileName, prompt: Text("placeholder.profileName"))
@@ -74,13 +182,11 @@ struct ConnectionEditorView: View {
         TextField(
           "field.serverAddress",
           text: $serverURL,
-          prompt: Text("https://komodo.example.com").foregroundStyle(.secondary)
+          prompt: Text(verbatim: "https://komodo.example.com").foregroundColor(.secondary)
         )
-          #if os(iOS)
           .textContentType(.URL)
           .textInputAutocapitalization(.never)
           .keyboardType(.URL)
-          #endif
       }
 
       Section("section.authentication") {
@@ -103,27 +209,27 @@ struct ConnectionEditorView: View {
       }
 
       Section {
-        Button {
-          Task { await testConnection() }
-        } label: {
-          if connectionState == .testing || isLoadingCredentials {
-            ProgressView()
-              .controlSize(.small)
-          } else {
-            Label(saveButtonTitle, systemImage: "checkmark.shield")
-          }
-        }
-        .disabled(!canTestConnection || connectionState == .testing || isLoadingCredentials)
+        saveButton
       } footer: {
         statusView
       }
     }
     .formStyle(.grouped)
-    .navigationTitle(profile == nil ? "title.newConnection" : "title.editConnection")
-    .frame(minWidth: 340, idealWidth: 520, minHeight: 420)
-    .task(id: profile?.id) {
-      await loadStoredCredentials()
+  }
+  #endif
+
+  private var saveButton: some View {
+    Button {
+      Task { await testConnection() }
+    } label: {
+      if connectionState == .testing || isLoadingCredentials {
+        ProgressView()
+          .controlSize(.small)
+      } else {
+        Label(saveButtonTitle, systemImage: "checkmark.shield")
+      }
     }
+    .disabled(!canTestConnection || connectionState == .testing || isLoadingCredentials)
   }
 
   @ViewBuilder

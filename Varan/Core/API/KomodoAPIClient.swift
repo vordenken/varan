@@ -10,6 +10,7 @@ enum KomodoAPIError: LocalizedError, Equatable {
   case unauthorized
   case invalidToken
   case forbidden
+  case validation(reason: String?)
   case server(statusCode: Int, reason: String?)
   case invalidPayload
   case networkUnavailable
@@ -26,6 +27,12 @@ enum KomodoAPIError: LocalizedError, Equatable {
       String(localized: "error.api.invalidToken")
     case .forbidden:
       String(localized: "error.api.forbidden")
+    case .validation(let reason):
+      if let reason {
+        String(format: String(localized: "error.api.validation.withReason"), reason)
+      } else {
+        String(localized: "error.api.validation.withoutReason")
+      }
     case .server(let statusCode, let reason):
       if let reason {
         String(format: String(localized: "error.api.server.withReason"), statusCode, reason)
@@ -180,7 +187,7 @@ actor KomodoAPIClient {
   private struct UpdateStackParameters: Encodable { let id: String; let config: StackConfigPatch }
 
   private let address: ServerAddress
-  private let authentication: KomodoAuthentication
+  private let authentication: KomodoAuthentication?
   private let session: URLSession
   private let encoder = JSONEncoder()
   private let decoder = JSONDecoder()
@@ -194,6 +201,14 @@ actor KomodoAPIClient {
     self.authentication = authentication
     self.session = session
   }
+
+#if DEBUG
+  init(screenshotAddress: ServerAddress, session: URLSession) {
+    self.address = screenshotAddress
+    self.authentication = nil
+    self.session = session
+  }
+#endif
 
   func testConnection() async throws {
     _ = try await listStacks(page: 0, limit: 1)
@@ -213,6 +228,23 @@ actor KomodoAPIClient {
       type: "ListServers",
       parameters: ListServersParameters(query: ServerQuery(), page: page, limit: limit)
     )
+  }
+
+  func listAllServers() async throws -> [ServerListItem] {
+    let pageSize = 50
+    var servers: [ServerListItem] = []
+    var seenIDs = Set<String>()
+    var page = 0
+
+    while true {
+      try Task.checkCancellation()
+      let batch = try await listServers(page: page, limit: pageSize)
+      for server in batch where seenIDs.insert(server.id).inserted {
+        servers.append(server)
+      }
+      if batch.count < pageSize { return servers }
+      page += 1
+    }
   }
 
   func getServer(idOrName: String) async throws -> ServerDetail {
@@ -262,6 +294,34 @@ actor KomodoAPIClient {
 
   func deleteServer(idOrName: String) async throws -> ServerDetail {
     try await write(type: "DeleteServer", parameters: DeleteResourceParameters(id: idOrName))
+  }
+
+  func startAllContainers(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "StartAllContainers", parameters: ServerParameters(server: server))
+  }
+
+  func restartAllContainers(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "RestartAllContainers", parameters: ServerParameters(server: server))
+  }
+
+  func pauseAllContainers(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "PauseAllContainers", parameters: ServerParameters(server: server))
+  }
+
+  func unpauseAllContainers(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "UnpauseAllContainers", parameters: ServerParameters(server: server))
+  }
+
+  func stopAllContainers(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "StopAllContainers", parameters: ServerParameters(server: server))
+  }
+
+  func pruneBuildx(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "PruneBuildx", parameters: ServerParameters(server: server))
+  }
+
+  func pruneSystem(server: String) async throws -> KomodoUpdate {
+    try await execute(type: "PruneSystem", parameters: ServerParameters(server: server))
   }
 
   func createStack(name: String, config: StackConfigPatch) async throws -> StackDetail {
@@ -500,11 +560,13 @@ actor KomodoAPIClient {
       switch authentication {
       case .bearerToken:
         throw KomodoAPIError.invalidToken
-      case .apiKey:
+      case .apiKey, nil:
         throw KomodoAPIError.unauthorized
       }
     case 403:
       throw KomodoAPIError.forbidden
+    case 400, 422:
+      throw KomodoAPIError.validation(reason: safeServerReason(from: data))
     default:
       throw KomodoAPIError.server(
         statusCode: httpResponse.statusCode,
@@ -536,6 +598,8 @@ actor KomodoAPIClient {
       request.setValue(secret, forHTTPHeaderField: "x-api-secret")
     case .bearerToken(let token):
       request.setValue(token, forHTTPHeaderField: "authorization")
+    case nil:
+      break
     }
   }
 }
