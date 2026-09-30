@@ -4,6 +4,7 @@ import SwiftUI
 #if DEBUG
 enum ScreenshotDemo {
   static let enabled = ProcessInfo.processInfo.arguments.contains("--screenshot-demo")
+  static let colorScheme: ColorScheme? = ProcessInfo.processInfo.arguments.contains("--screenshot-light") ? .light : .dark
 
   static var screen: String {
     guard let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--screenshot-screen"),
@@ -26,8 +27,7 @@ enum ScreenshotDemo {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [ScreenshotDemoURLProtocol.self]
     return KomodoAPIClient(
-      address: try! ServerAddress("https://demo.varan.invalid"),
-      authentication: .apiKey(key: "demo", secret: "demo"),
+      screenshotAddress: try! ServerAddress("https://demo.varan.invalid"),
       session: URLSession(configuration: configuration)
     )
   }
@@ -37,7 +37,15 @@ enum ScreenshotDemo {
   }
 
   static var serverSummary: ServerListItem {
-    decode(ServerListItem.self, from: serverListJSON.dropArray)
+    decode(ServerListItem.self, from: serverListResponseJSON.dropArray)
+  }
+
+  static var serverListResponseJSON: String {
+    guard screen == "server-partial" else { return serverListJSON }
+    return serverListJSON.replacingOccurrences(
+      of: "\"region\":\"Home Lab\",\"address\":\"192.168.1.10\"",
+      with: "\"region\":\"\",\"address\":null,\"external_address\":\"server.example.com\""
+    )
   }
 
   static var stackSummary: StackListItem {
@@ -49,12 +57,20 @@ enum ScreenshotDemo {
   }
 
   static let serverListJSON = """
-  [{"id":"server-home","name":"Home Server","template":false,"tags":["production"],"info":{"state":"Ok","version":"1.19.4","stats":{"cpu_perc":18.7,"mem_used_gb":6.4,"mem_total_gb":16},"region":"Home Lab","address":"192.168.1.10"}}]
+  [{"id":"server-home","name":"Home Server","template":false,"tags":["production"],"info":{"state":"Ok","version":"1.19.4","stats":{"cpu_perc":18.7,"mem_used_gb":6.4,"mem_total_gb":16},"region":"Home Lab","address":"192.168.1.10","public_ip":"203.0.113.10"}}]
   """
 
   static let serverDetailJSON = """
   {"_id":"server-home","name":"Home Server","description":"Primary home lab host","tags":["production"],"info":{},"config":{"address":"https://192.168.1.10:8120","external_address":"https://komodo.example.com","region":"Home Lab","enabled":true,"insecure_tls":false,"auto_prune":true,"stats_monitoring":true}}
   """
+
+  static var serverDetailResponseJSON: String {
+    guard screen == "server-partial" else { return serverDetailJSON }
+    return serverDetailJSON.replacingOccurrences(
+      of: "\"address\":\"https://192.168.1.10:8120\",\"external_address\":\"https://komodo.example.com\",\"region\":\"Home Lab\"",
+      with: "\"address\":\"\",\"region\":\"\""
+    )
+  }
 
   static let systemStatsJSON = """
   {"cpu_perc":18.7,"load_average":{"one":0.82,"five":0.66,"fifteen":0.59},"mem_used_gb":6.4,"mem_total_gb":16,"swap_used_gb":0.1,"swap_total_gb":4,"disks":[{"mount":"/","file_system":"apfs","used_gb":128.2,"total_gb":500}],"network_ingress_bytes":2843000,"network_egress_bytes":917000,"refresh_ts":1789983600,"polling_rate":"5 seconds"}
@@ -68,6 +84,12 @@ enum ScreenshotDemo {
   [{"id":"stack-home","name":"Home Services","template":false,"tags":["production"],"info":{"server_name":"Home Server","swarm_name":"","state":"running","status":"deployed","services":[{"service":"web","image":"ghcr.io/example/home-web:2.4","update_available":true},{"service":"database","image":"postgres:17","update_available":false}]}}]
   """
 
+  static var stackOverviewJSON: String {
+    String(stackListJSON.trimmingCharacters(in: .whitespacesAndNewlines).dropLast()) + "," + """
+      {"id":"stack-failed","name":"Failed Backup","template":false,"tags":[],"info":{"server_name":"Home Server","swarm_name":"","state":"failed","status":"failed","services":[]}}]
+      """
+  }
+
   static let stackDetailJSON = """
   {"_id":"stack-home","name":"Home Services","description":"Core services for the home lab","template":false,"tags":["production"],"info":{"missing_files":[],"deployed_project_name":"home-services","deployed_hash":"c124a98","latest_hash":"d833fb2","latest_services":[{"service_name":"web","container_name":"home-web-1","image":"ghcr.io/example/home-web:2.4"},{"service_name":"database","container_name":"home-db-1","image":"postgres:17"}]},"config":{"server_id":"server-home","swarm_id":"","project_name":"home-services","file_paths":["compose.yaml"],"linked_repo":"","repo":"example/home-services","branch":"main","auto_pull":true,"poll_for_updates":true,"auto_update":false}}
   """
@@ -75,6 +97,17 @@ enum ScreenshotDemo {
   static let containersJSON = """
   [{"id":"container-web","server_id":"server-home","server_name":"Home Server","name":"home-web-1","image":"ghcr.io/example/home-web:2.4","image_id":"sha256:abc","state":"running","status":"Up 12 hours","networks":["proxy","backend"],"created":1789940400,"size_rw":12582912,"size_root_fs":268435456,"network_mode":"proxy","ports":[{"IP":"0.0.0.0","PrivatePort":8080,"PublicPort":443,"Type":"tcp"}],"volumes":["/srv/home/config:/app/config"],"stats":{"name":"home-web-1","cpu_perc":2.8,"mem_perc":12.4,"mem_usage":"126MiB / 1GiB","net_io":"18.4MB / 6.7MB","block_io":"42.1MB / 8.2MB","pids":14}},{"id":"container-db","server_id":"server-home","server_name":"Home Server","name":"home-db-1","image":"postgres:17","state":"running","status":"Up 12 hours","networks":["backend"],"network_mode":"backend","ports":[],"volumes":["home-db:/var/lib/postgresql/data"],"stats":{"name":"home-db-1","cpu_perc":1.2,"mem_perc":18.7,"mem_usage":"191MiB / 1GiB","net_io":"4.2MB / 9.1MB","block_io":"84.5MB / 31.2MB","pids":9}}]
   """
+
+  static let mixedServerContainersJSON = """
+  [{"id":"container-paused","server_id":"server-home","server_name":"Home Server","name":"paused-demo","state":"paused","status":"Paused","networks":[]},
+   {"id":"container-stopped","server_id":"server-home","server_name":"Home Server","name":"stopped-demo","state":"exited","status":"Exited","networks":[]}]
+  """
+
+  static var containerOverviewJSON: String {
+    String(containersJSON.trimmingCharacters(in: .whitespacesAndNewlines).dropLast()) + "," + """
+      {"id":"container-failed","server_id":"server-home","server_name":"Home Server","name":"home-worker-1","image":"ghcr.io/example/worker:1.0","state":"unhealthy","status":"Unhealthy","networks":[],"ports":[],"volumes":[]}]
+      """
+  }
 
   static let webContainerJSON = """
   {"id":"container-web","server_id":"server-home","server_name":"Home Server","name":"home-web-1","image":"ghcr.io/example/home-web:2.4","image_id":"sha256:abc","state":"running","status":"Up 12 hours","networks":["proxy","backend"],"created":1789940400,"size_rw":12582912,"size_root_fs":268435456,"network_mode":"proxy","ports":[{"IP":"0.0.0.0","PrivatePort":8080,"PublicPort":443,"Type":"tcp"}],"volumes":["/srv/home/config:/app/config"],"stats":{"name":"home-web-1","cpu_perc":2.8,"mem_perc":12.4,"mem_usage":"126MiB / 1GiB","net_io":"18.4MB / 6.7MB","block_io":"42.1MB / 8.2MB","pids":14}}
@@ -96,6 +129,8 @@ private extension String {
 }
 
 private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable {
+  private static let state = DemoState()
+
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
@@ -103,7 +138,7 @@ private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable 
     let data = Self.bodyData(from: request)
     let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     let requestType = object?["type"] as? String ?? ""
-    let json = Self.responseJSON(for: requestType)
+    let json = Self.responseJSON(for: requestType, body: object)
     let response = HTTPURLResponse(
       url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
       headerFields: ["Content-Type": "application/json"]
@@ -130,28 +165,72 @@ private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable 
     return body
   }
 
-  private static func responseJSON(for type: String) -> String {
+  private static func responseJSON(for type: String, body: [String: Any]?) -> String {
     switch type {
-    case "ListServers": ScreenshotDemo.serverListJSON
-    case "GetServer": ScreenshotDemo.serverDetailJSON
+    case "ListServers": ScreenshotDemo.serverListResponseJSON
+    case "GetServer": state.serverJSON
+    case "UpdateServer": state.updateServer(body)
     case "GetServerState": "{\"status\":\"Ok\"}"
     case "GetSystemStats": ScreenshotDemo.systemStatsJSON
     case "GetHistoricalServerStats": ScreenshotDemo.historyJSON
-    case "ListStacks": ScreenshotDemo.stackListJSON
-    case "GetStack": ScreenshotDemo.stackDetailJSON
+    case "ListStacks": ScreenshotDemo.screen == "stack-list"
+      ? ScreenshotDemo.stackOverviewJSON : ScreenshotDemo.stackListJSON
+    case "GetStack": state.stackJSON
+    case "UpdateStack": state.updateStack(body)
     case "ListStackServices": ScreenshotDemo.servicesJSON
-    case "ListAllContainers", "ListContainers": ScreenshotDemo.containersJSON
+    case "ListAllContainers", "ListContainers": switch ScreenshotDemo.screen {
+      case "container-list": ScreenshotDemo.containerOverviewJSON
+      case "server-mixed": ScreenshotDemo.mixedServerContainersJSON
+      default: ScreenshotDemo.containersJSON
+    }
     case "GetStackLog", "GetContainerLog": ScreenshotDemo.logJSON
     default: "{\"_id\":\"demo-update\",\"success\":true,\"status\":\"Complete\"}"
     }
   }
+
+  private final class DemoState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var serverRegion = "Home Lab"
+    private var stackBranch = "main"
+
+    var serverJSON: String {
+      lock.lock(); defer { lock.unlock() }
+      return ScreenshotDemo.serverDetailResponseJSON.replacingOccurrences(
+        of: "\"region\":\"Home Lab\"", with: "\"region\":\"\(serverRegion)\""
+      )
+    }
+
+    var stackJSON: String {
+      lock.lock(); defer { lock.unlock() }
+      return ScreenshotDemo.stackDetailJSON.replacingOccurrences(
+        of: "\"branch\":\"main\"", with: "\"branch\":\"\(stackBranch)\""
+      )
+    }
+
+    func updateServer(_ body: [String: Any]?) -> String {
+      lock.lock()
+      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any],
+         let region = config["region"] as? String { serverRegion = region }
+      lock.unlock()
+      return serverJSON
+    }
+
+    func updateStack(_ body: [String: Any]?) -> String {
+      lock.lock()
+      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any],
+         let branch = config["branch"] as? String { stackBranch = branch }
+      lock.unlock()
+      return stackJSON
+    }
+  }
 }
 
-#if os(iOS)
+#if os(iOS) || os(macOS)
 struct ScreenshotDemoRootView: View {
   @StateObject private var liveUpdates = KomodoLiveUpdateController(initialStatus: .live)
   @StateObject private var appSettings = AppSettings()
-  @State private var selectedTab = ScreenshotDemo.screen
+  @State private var selectedTab = ScreenshotDemo.screen.hasPrefix("server-")
+    ? "server" : ScreenshotDemo.screen.replacingOccurrences(of: "-list", with: "")
 
   var body: some View {
     TabView(selection: $selectedTab) {
@@ -159,26 +238,28 @@ struct ScreenshotDemoRootView: View {
         demoNavigation { serverDetail }
       }
       Tab("title.stacks", systemImage: "square.stack.3d.up.fill", value: "stack") {
-        demoNavigation { stackDetail }
+        demoNavigation { stackScreen }
       }
       Tab("title.containers", systemImage: "shippingbox.fill", value: "container") {
-        demoNavigation { containerDetail }
+        demoNavigation { containerScreen }
       }
       Tab("settings.title", systemImage: "gearshape.fill", value: "settings") {
         NavigationStack { SettingsView(settings: appSettings) }
       }
     }
     .environmentObject(liveUpdates)
-    .preferredColorScheme(.dark)
+    .preferredColorScheme(ScreenshotDemo.colorScheme)
   }
 
   private func demoNavigation<Content: View>(@ViewBuilder content: () -> Content) -> some View {
     NavigationStack {
       content()
         .toolbar {
+#if os(iOS)
           ToolbarItem(placement: .topBarLeading) {
             Button("action.back", systemImage: "chevron.backward") {}
           }
+#endif
         }
     }
   }
@@ -192,22 +273,38 @@ struct ScreenshotDemoRootView: View {
     )
   }
 
-  private var stackDetail: some View {
-    StackDetailView(
-      summary: ScreenshotDemo.stackSummary,
-      profile: ScreenshotDemo.profile,
-      keychainStore: .shared,
-      appSettings: appSettings
-    )
+  @ViewBuilder private var stackScreen: some View {
+    if ScreenshotDemo.screen == "stack-list" {
+      StackListView(
+        profile: ScreenshotDemo.profile,
+        keychainStore: .shared,
+        appSettings: appSettings
+      )
+    } else {
+      StackDetailView(
+        summary: ScreenshotDemo.stackSummary,
+        profile: ScreenshotDemo.profile,
+        keychainStore: .shared,
+        appSettings: appSettings
+      )
+    }
   }
 
-  private var containerDetail: some View {
-    ContainerDetailView(
-      container: ScreenshotDemo.containerSummary,
-      profile: ScreenshotDemo.profile,
-      keychainStore: .shared,
-      appSettings: appSettings
-    )
+  @ViewBuilder private var containerScreen: some View {
+    if ScreenshotDemo.screen == "container-list" {
+      ContainerListView(
+        profile: ScreenshotDemo.profile,
+        keychainStore: .shared,
+        appSettings: appSettings
+      )
+    } else {
+      ContainerDetailView(
+        container: ScreenshotDemo.containerSummary,
+        profile: ScreenshotDemo.profile,
+        keychainStore: .shared,
+        appSettings: appSettings
+      )
+    }
   }
 }
 #endif

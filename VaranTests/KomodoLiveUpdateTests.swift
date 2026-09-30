@@ -95,6 +95,23 @@ final class KomodoLiveUpdateTests: XCTestCase {
     XCTAssertEqual(controller.status, .offline)
   }
 
+  func testSharedRefreshIntervalsStopWhenDisabled() async throws {
+    let controller = makeController(transport: MockLiveTransport(connections: []))
+
+    controller.configureRefreshIntervals(metricsSeconds: 1, logsSeconds: 1)
+    try await waitUntil(timeout: .seconds(3)) {
+      controller.metricsRefreshGeneration > 0 && controller.logsRefreshGeneration > 0
+    }
+
+    controller.stopRefreshIntervals()
+    let metricsGeneration = controller.metricsRefreshGeneration
+    let logsGeneration = controller.logsRefreshGeneration
+    try await Task.sleep(for: .milliseconds(1_100))
+
+    XCTAssertEqual(controller.metricsRefreshGeneration, metricsGeneration)
+    XCTAssertEqual(controller.logsRefreshGeneration, logsGeneration)
+  }
+
   private func makeController(transport: MockLiveTransport) -> KomodoLiveUpdateController {
     KomodoLiveUpdateController(
       transport: transport,

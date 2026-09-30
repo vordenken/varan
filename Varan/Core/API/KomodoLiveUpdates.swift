@@ -94,6 +94,8 @@ final class KomodoLiveUpdateController: ObservableObject {
   @Published private(set) var lastEventReceivedAt: Date?
   @Published private(set) var latestEvent: KomodoUpdateEvent?
   @Published private(set) var refreshGeneration = 0
+  @Published private(set) var metricsRefreshGeneration = 0
+  @Published private(set) var logsRefreshGeneration = 0
 
   private let transport: any LiveWebSocketTransport
   private let reconnectDelays: [Duration]
@@ -103,6 +105,10 @@ final class KomodoLiveUpdateController: ObservableObject {
   private var connectionTask: Task<Void, Never>?
   private var connection: (any LiveWebSocketConnection)?
   private var contextID: UUID?
+  private var metricsRefreshTask: Task<Void, Never>?
+  private var logsRefreshTask: Task<Void, Never>?
+  private var metricsIntervalSeconds: Int?
+  private var logsIntervalSeconds: Int?
 
   init(
     transport: any LiveWebSocketTransport = URLSessionLiveWebSocketTransport(),
@@ -144,6 +150,43 @@ final class KomodoLiveUpdateController: ObservableObject {
 
   func requestRefresh() {
     refreshGeneration += 1
+  }
+
+  func configureRefreshIntervals(metricsSeconds: Int?, logsSeconds: Int?) {
+    let metricsSeconds = metricsSeconds.flatMap { $0 > 0 ? $0 : nil }
+    let logsSeconds = logsSeconds.flatMap { $0 > 0 ? $0 : nil }
+
+    if metricsSeconds != metricsIntervalSeconds {
+      metricsRefreshTask?.cancel()
+      metricsIntervalSeconds = metricsSeconds
+      metricsRefreshTask = metricsSeconds.map { seconds in
+        Task { [weak self] in
+          while !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+            guard !Task.isCancelled else { return }
+            self?.metricsRefreshGeneration += 1
+          }
+        }
+      }
+    }
+
+    if logsSeconds != logsIntervalSeconds {
+      logsRefreshTask?.cancel()
+      logsIntervalSeconds = logsSeconds
+      logsRefreshTask = logsSeconds.map { seconds in
+        Task { [weak self] in
+          while !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+            guard !Task.isCancelled else { return }
+            self?.logsRefreshGeneration += 1
+          }
+        }
+      }
+    }
+  }
+
+  func stopRefreshIntervals() {
+    configureRefreshIntervals(metricsSeconds: nil, logsSeconds: nil)
   }
 
   private func run(

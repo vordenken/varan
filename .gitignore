@@ -5,4 +5,5 @@ build/
 xcuserdata/
 .DS_Store
 TODO.md
+Screenshots/
 Configuration/Developer.xcconfig

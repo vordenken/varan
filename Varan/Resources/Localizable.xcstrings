@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "%.1f / %.1f %@" : {
       "localizations" : {
         "en" : {
@@ -293,6 +296,7 @@
       }
     },
     "action.loadMore" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -309,6 +313,7 @@
       }
     },
     "action.more" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -400,6 +405,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pause"
+          }
+        }
+      }
+    },
+    "action.pauseAllContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container pausieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause All Containers"
+          }
+        }
+      }
+    },
+    "action.pruneBuildx" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buildx-Cache bereinigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prune Buildx Cache"
+          }
+        }
+      }
+    },
+    "action.pruneSystem" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker-System bereinigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prune Docker System"
           }
         }
       }
@@ -500,6 +553,22 @@
         }
       }
     },
+    "action.restartAllContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container neu starten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart All Containers"
+          }
+        }
+      }
+    },
     "action.resume" : {
       "localizations" : {
         "de" : {
@@ -512,6 +581,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Resume"
+          }
+        }
+      }
+    },
+    "action.resumeAllContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container fortsetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume All Containers"
           }
         }
       }
@@ -596,6 +681,102 @@
         }
       }
     },
+    "action.showFewerContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weniger Container anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show fewer containers"
+          }
+        }
+      }
+    },
+    "action.showFewerPorts" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weniger Ports anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show fewer ports"
+          }
+        }
+      }
+    },
+    "action.showFewerStacks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weniger Stacks anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show fewer stacks"
+          }
+        }
+      }
+    },
+    "action.showMoreContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Container anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show more containers"
+          }
+        }
+      }
+    },
+    "action.showMorePorts" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Ports anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show more ports"
+          }
+        }
+      }
+    },
+    "action.showMoreStacks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Stacks anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show more stacks"
+          }
+        }
+      }
+    },
     "action.start" : {
       "localizations" : {
         "de" : {
@@ -608,6 +789,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start"
+          }
+        }
+      }
+    },
+    "action.startAllContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container starten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start All Containers"
           }
         }
       }
@@ -641,6 +838,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stop"
+          }
+        }
+      }
+    },
+    "action.stopAllContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container stoppen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop All Containers"
           }
         }
       }
@@ -1015,6 +1228,7 @@
       }
     },
     "confirm.deleteServer.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1058,6 +1272,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All containers in stack %@ will be stopped and destroyed. The stack definition is kept."
+          }
+        }
+      }
+    },
+    "confirm.pruneBuildx.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der ungenutzte Buildx-Cache auf „%@“ wird entfernt. Künftige Builds können länger dauern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unused Buildx cache on “%@” will be removed. Future builds may take longer."
+          }
+        }
+      }
+    },
+    "confirm.pruneSystem.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf „%@“ entfernt Komodo ungenutzte Container, Images, Netzwerke und Volumes. Diese Daten können nicht wiederhergestellt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komodo will remove unused containers, images, networks, and volumes on “%@”. This data cannot be recovered."
           }
         }
       }
@@ -1143,6 +1389,22 @@
         }
       }
     },
+    "confirm.serverContainerAction.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Aktion kann alle %2$ld Container auf „%1$@“ betreffen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action may affect all %2$ld containers on “%1$@”."
+          }
+        }
+      }
+    },
     "confirm.stackAction.message" : {
       "localizations" : {
         "de" : {
@@ -1155,6 +1417,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This action will be performed on stack %@."
+          }
+        }
+      }
+    },
+    "confirm.stopAllContainers.message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Container auf „%1$@“ werden gestoppt. Auf diesem Server sind %2$ld Container vorhanden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All containers on “%1$@” will be stopped. This server has %2$ld containers."
           }
         }
       }
@@ -1401,6 +1679,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Credentials were rejected."
+          }
+        }
+      }
+    },
+    "error.api.validation.withoutReason" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server hat die Eingaben als ungültig abgelehnt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server rejected the submitted values as invalid."
+          }
+        }
+      }
+    },
+    "error.api.validation.withReason" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitte Eingaben prüfen: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please check the submitted values: %@"
           }
         }
       }
@@ -1791,6 +2101,22 @@
         }
       }
     },
+    "field.disk" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datenträger"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disk"
+          }
+        }
+      }
+    },
     "field.enabled" : {
       "localizations" : {
         "de" : {
@@ -1925,7 +2251,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Load Average"
+            "value" : "Systemlast (1/5/15 Min.)"
           }
         },
         "en" : {
@@ -2082,6 +2408,7 @@
       }
     },
     "field.pollingRate" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2125,6 +2452,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Project"
+          }
+        }
+      }
+    },
+    "field.publicIP" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffentliche IP"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Public IP"
           }
         }
       }
@@ -2257,8 +2600,341 @@
         }
       }
     },
-    "https://komodo.example.com" : {
-
+    "filter.allHosts" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Server / Swarms"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Servers / Swarms"
+          }
+        }
+      }
+    },
+    "filter.allServers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Server"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Servers"
+          }
+        }
+      }
+    },
+    "filter.allStates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Zustände"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All States"
+          }
+        }
+      }
+    },
+    "filter.attention" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auffällig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs Attention"
+          }
+        }
+      }
+    },
+    "filter.clearTags" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags zurücksetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Tags"
+          }
+        }
+      }
+    },
+    "filter.containers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container filtern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter Containers"
+          }
+        }
+      }
+    },
+    "filter.host" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server / Swarm"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server / Swarm"
+          }
+        }
+      }
+    },
+    "filter.otherStates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonstige"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "filter.publishedPorts" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit veröffentlichtem Port"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With Published Port"
+          }
+        }
+      }
+    },
+    "filter.relatedResources" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugehörige Ressourcen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Related Resources"
+          }
+        }
+      }
+    },
+    "filter.reset" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter zurücksetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset Filters"
+          }
+        }
+      }
+    },
+    "filter.resetAll" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suche und Filter zurücksetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset Search and Filters"
+          }
+        }
+      }
+    },
+    "filter.resourceState" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zustand"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "State"
+          }
+        }
+      }
+    },
+    "filter.servers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server filtern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter Servers"
+          }
+        }
+      }
+    },
+    "filter.serverState" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverstatus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server State"
+          }
+        }
+      }
+    },
+    "filter.serversWithContainers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Containern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With Containers"
+          }
+        }
+      }
+    },
+    "filter.serversWithStacks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Stacks"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With Stacks"
+          }
+        }
+      }
+    },
+    "filter.stacks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stacks filtern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter Stacks"
+          }
+        }
+      }
+    },
+    "filter.tags" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags"
+          }
+        }
+      }
+    },
+    "filter.unavailableServers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht erreichbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        }
+      }
+    },
+    "filter.updatesAvailable" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Available"
+          }
+        }
+      }
     },
     "JWT" : {
 
@@ -2323,22 +2999,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All Services"
-          }
-        }
-      }
-    },
-    "log.autoRefresh" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatisch alle 5 Sekunden aktualisieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Refresh automatically every 5 seconds"
           }
         }
       }
@@ -2419,6 +3079,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The selected log stream does not contain this search text."
+          }
+        }
+      }
+    },
+    "log.pauseFollowing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuen Zeilen nicht mehr folgen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop following new lines"
           }
         }
       }
@@ -2552,6 +3228,22 @@
         }
       }
     },
+    "message.metricsStale" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Messwerte sind möglicherweise veraltet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These measurements may be stale."
+          }
+        }
+      }
+    },
     "message.metricsUnavailable" : {
       "localizations" : {
         "de" : {
@@ -2580,6 +3272,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No containers found."
+          }
+        }
+      }
+    },
+    "message.noContainers.description" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In der aktuellen Komodo-Instanz wurden keine Container gefunden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No containers were found in the active Komodo instance."
+          }
+        }
+      }
+    },
+    "message.noContainersMatchFilters" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Container entsprechen den ausgewählten Filtern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No containers match the selected filters."
+          }
+        }
+      }
+    },
+    "message.noServers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Server gefunden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No servers found."
+          }
+        }
+      }
+    },
+    "message.noServers.description" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge einen Server hinzu, um ihn hier zu sehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a server to see it here."
+          }
+        }
+      }
+    },
+    "message.noServersMatchFilters" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Server entsprechen den ausgewählten Filtern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No servers match the selected filters."
           }
         }
       }
@@ -2632,6 +3404,22 @@
         }
       }
     },
+    "message.noStacksMatchFilters" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Stacks entsprechen den ausgewählten Filtern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No stacks match the selected filters."
+          }
+        }
+      }
+    },
     "message.selectConnection" : {
       "localizations" : {
         "de" : {
@@ -2660,6 +3448,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Select a Komodo instance in the sidebar."
+          }
+        }
+      }
+    },
+    "message.serverConfigurationIncomplete" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komodo hat nicht alle Servereinstellungen geliefert. Prüfe die Verbindung oder aktualisiere die Serveransicht, bevor du Änderungen speicherst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komodo did not return all server settings. Check the connection or refresh the server before saving changes."
+          }
+        }
+      }
+    },
+    "message.serverPublicIPIsNotExternalAddress" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die öffentliche IP wird automatisch erkannt. Die externe Adresse ist eine separate, optionale Einstellung für Container-Links."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The public IP is detected automatically. External address is a separate, optional setting for container links."
           }
         }
       }
@@ -2697,6 +3517,7 @@
       }
     },
     "metrics.cpuCompact" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2869,6 +3690,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Metric Refresh"
+          }
+        }
+      }
+    },
+    "metrics.unavailable" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht gemeldet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not reported"
           }
         }
       }
@@ -3248,6 +4085,22 @@
         }
       }
     },
+    "section.maintenanceActions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenance"
+          }
+        }
+      }
+    },
     "section.networks" : {
       "localizations" : {
         "de" : {
@@ -3388,6 +4241,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Volumes"
+          }
+        }
+      }
+    },
+    "server.resources.containers" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container: %d"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers: %d"
+          }
+        }
+      }
+    },
+    "server.resources.stacks" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stacks: %d"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stacks: %d"
+          }
+        }
+      }
+    },
+    "server.summary.memoryValue" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ GB"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ GB"
+          }
+        }
+      }
+    },
+    "server.summary.ram" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAM"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAM"
           }
         }
       }
@@ -3621,13 +4540,13 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hält Ressourcen über Komodos Live-Verbindung aktuell. Manuelles Aktualisieren bleibt immer verfügbar."
+            "value" : "Komodo-Ereignisse kommen über WebSocket und lösen neue Ressourcenabfragen aus. Metriken und Logs nutzen die unten eingestellten Intervalle."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keeps resources current through Komodo's live connection. Manual refresh remains available."
+            "value" : "Komodo events arrive over WebSocket and trigger resource reads. Metrics and logs use the intervals below."
           }
         }
       }
@@ -3653,13 +4572,77 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aktualisierungsintervall"
+            "value" : "Logs aktualisieren"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Refresh Interval"
+            "value" : "Refresh Logs"
+          }
+        }
+      }
+    },
+    "settings.logs.description" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur bei geöffneter Logansicht werden die letzten Zeilen über HTTPS neu abgerufen. Bei „Manuell“ zum Aktualisieren nach unten ziehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The latest lines are fetched over HTTPS only while a log viewer is open. With Manual selected, pull down to refresh."
+          }
+        }
+      }
+    },
+    "settings.metrics.description" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei aktiver App werden Messwerte über HTTPS im gewählten Intervall abgerufen. WebSocket-Ereignisse können zusätzlich eine Abfrage auslösen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While the app is active, metrics are fetched over HTTPS at the selected interval. WebSocket events may also trigger a read."
+          }
+        }
+      }
+    },
+    "settings.refresh.manual" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuell"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual"
+          }
+        }
+      }
+    },
+    "settings.refresh.onEvents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Ereignissen / manuell"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On events / manually"
           }
         }
       }
@@ -3856,6 +4839,22 @@
         }
       }
     },
+    "state.dead" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgefallen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dead"
+          }
+        }
+      }
+    },
     "state.deploying" : {
       "localizations" : {
         "de" : {
@@ -3884,6 +4883,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not deployed"
+          }
+        }
+      }
+    },
+    "state.error" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehler"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error"
+          }
+        }
+      }
+    },
+    "state.failed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlgeschlagen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed"
           }
         }
       }
@@ -4208,6 +5239,22 @@
         }
       }
     },
+    "status.serverActionSubmitted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktion „%@“ an Komodo gesendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent “%@” to Komodo."
+          }
+        }
+      }
+    },
     "status.stackRunning" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4241,8 +5288,85 @@
         }
       }
     },
+    "summary.active" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiv"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active"
+          }
+        }
+      }
+    },
+    "summary.problems" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probleme"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Problems"
+          }
+        }
+      }
+    },
+    "summary.refreshFailed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisierung fehlgeschlagen. Zahlen können veraltet sein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh failed. Counts may be outdated."
+          }
+        }
+      }
+    },
+    "summary.total" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesamt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        }
+      }
+    },
     "Time" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time"
+          }
+        }
+      }
     },
     "title.containerActions" : {
       "localizations" : {
@@ -4417,6 +5541,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New Stack"
+          }
+        }
+      }
+    },
+    "title.serverActions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveraktionen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server Actions"
           }
         }
       }

@@ -49,7 +49,6 @@ private enum StackResourceAction: String, Identifiable {
 
 struct StackDetailView: View {
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   private enum LoadState: Equatable {
     case loading
@@ -106,16 +105,7 @@ struct StackDetailView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .navigationTitle(detail?.name ?? summary.name)
     .toolbar {
-      ToolbarItemGroup {
-        LiveConnectionStatusButton(
-          profile: profile,
-          keychainStore: keychainStore,
-          appSettings: appSettings
-        )
-        Button("action.refresh", systemImage: "arrow.clockwise") {
-          Task { await loadContent() }
-        }
-        .disabled(isBusy)
+      ToolbarItemGroup(placement: .primaryAction) {
         StackActionMenu(
           state: effectiveState,
           updateAvailable: updateAvailable,
@@ -124,6 +114,18 @@ struct StackDetailView: View {
           edit: { showingEditor = true },
           perform: handleStackAction
         )
+        LiveConnectionStatusButton(
+          profile: profile,
+          keychainStore: keychainStore,
+          appSettings: appSettings
+        )
+        #if os(macOS)
+        Button("action.refresh", systemImage: "arrow.clockwise") {
+          Task { await loadContent() }
+        }
+        .disabled(isBusy)
+        .keyboardShortcut("r", modifiers: .command)
+        #endif
       }
     }
     .refreshable {
@@ -132,12 +134,8 @@ struct StackDetailView: View {
     .task(id: summary.id) {
       await loadContent()
     }
-    .task(id: "\(appSettings.metricsAutoRefresh)-\(appSettings.metricsRefreshInterval.rawValue)-\(scenePhase)") {
-      while appSettings.metricsAutoRefresh, scenePhase == .active, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(appSettings.metricsRefreshInterval.rawValue))
-        guard !Task.isCancelled else { return }
-        await loadContent(showProgress: false)
-      }
+    .onChange(of: liveUpdates.metricsRefreshGeneration) { _, _ in
+      Task { await loadContent(showProgress: false) }
     }
     .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
       if event.affects(.stack, id: summary.id) || event.affects(.server) {
@@ -215,6 +213,9 @@ struct StackDetailView: View {
         }
         if let repository = detail?.config.repository, !repository.isEmpty {
           LabeledContent("field.repository", value: repository)
+        }
+        if let branch = detail?.config.branch, !branch.isEmpty {
+          LabeledContent("field.branch", value: branch)
         }
       }
 
@@ -597,6 +598,7 @@ private struct StackActionMenu: View {
     }
     .disabled(!isEnabled || activeAction != nil)
     .accessibilityLabel(activeAction?.title ?? String(localized: "title.stackActions"))
+    .accessibilityIdentifier("stack-actions-menu")
   }
 
   private func actionButton(_ action: StackResourceAction) -> some View {
@@ -854,6 +856,7 @@ enum LogSource: Hashable, Identifiable {
 }
 
 struct LogViewerView: View {
+  @EnvironmentObject private var liveUpdates: KomodoLiveUpdateController
   private enum Stream: String, CaseIterable, Identifiable {
     case combined
     case standardOutput
@@ -930,26 +933,25 @@ struct LogViewerView: View {
     .navigationBarTitleDisplayMode(.inline)
     #endif
     .toolbar {
-      ToolbarItemGroup {
+      ToolbarItemGroup(placement: .primaryAction) {
         LiveConnectionStatusButton(
           profile: profile,
           keychainStore: keychainStore,
           appSettings: appSettings
         )
+        #if os(macOS)
         Button("action.refreshNow", systemImage: "arrow.clockwise") {
           Task { await loadLog() }
         }
         .disabled(isLoading)
-
+        #endif
       }
     }
     .task(id: logLoadingTaskID) {
       await loadLog()
-      while appSettings.logsAutoRefresh, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(appSettings.logRefreshInterval.rawValue))
-        guard !Task.isCancelled else { return }
-        await loadLog(showProgress: false)
-      }
+    }
+    .onChange(of: liveUpdates.logsRefreshGeneration) { _, _ in
+      Task { await loadLog(showProgress: false) }
     }
     .onChange(of: appSettings.logsFollowLatest) { _, follows in
       followsLatest = follows
@@ -969,6 +971,15 @@ struct LogViewerView: View {
           serviceScopeMenu
         }
         Spacer()
+        Button(followActionTitle, systemImage: "arrow.down.to.line") {
+          followsLatest.toggle()
+          appSettings.logsFollowLatest = followsLatest
+          if followsLatest { searchText = "" }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+        .tint(followsLatest ? .accentColor : .secondary)
+        .accessibilityIdentifier("log-follow-toggle")
         Picker("log.tail", selection: $tail) {
           Text(verbatim: "100").tag(100)
           Text(verbatim: "200").tag(200)
@@ -992,6 +1003,10 @@ struct LogViewerView: View {
     .padding(.horizontal)
     .padding(.vertical, 8)
     .background(.bar)
+  }
+
+  private var followActionTitle: LocalizedStringKey {
+    followsLatest ? "log.pauseFollowing" : "log.followLatest"
   }
 
   private var serviceScopeMenu: some View {
@@ -1061,6 +1076,7 @@ struct LogViewerView: View {
         .accessibilityHidden(true)
       TextField("log.search", text: $searchText)
         .textFieldStyle(.plain)
+        .accessibilityIdentifier("log-search-field")
         #if os(iOS)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
@@ -1124,6 +1140,7 @@ struct LogViewerView: View {
               .frame(height: 1)
               .id("log-end")
           }
+          .refreshable { await loadLog() }
           .defaultScrollAnchor(.bottom)
           .onScrollPhaseChange { _, newPhase in
             if newPhase == .interacting {
@@ -1133,6 +1150,16 @@ struct LogViewerView: View {
           .onChange(of: log) {
             guard followsLatest, !searchResult.isActive else { return }
             proxy.scrollTo("log-end", anchor: .bottom)
+          }
+          .onChange(of: followsLatest) { _, follows in
+            if follows, !searchResult.isActive {
+              proxy.scrollTo("log-end", anchor: .bottom)
+            }
+          }
+          .onChange(of: searchResult.isActive) { _, isActive in
+            if !isActive, followsLatest {
+              proxy.scrollTo("log-end", anchor: .bottom)
+            }
           }
           .onChange(of: searchText) {
             if searchResult.isActive {
@@ -1177,7 +1204,7 @@ struct LogViewerView: View {
 
   private var logLoadingTaskID: String {
     let services = selectedServices.sorted().joined(separator: ",")
-    return "\(source.id)-\(services)-\(tail)-\(appSettings.logsAutoRefresh)-\(appSettings.logRefreshInterval.rawValue)"
+    return "\(source.id)-\(services)-\(tail)"
   }
 
   @MainActor

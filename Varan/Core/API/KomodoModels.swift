@@ -257,6 +257,7 @@ struct ContainerStats: Decodable, Equatable, Sendable {
   let networkIO: String
   let blockIO: String
   let processCount: Int
+  let availableFields: Set<String>
 
   var cpuCoreEquivalent: Double {
     cpuPercent / 100
@@ -291,6 +292,18 @@ struct ContainerStats: Decodable, Equatable, Sendable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    availableFields = Set([
+      ("cpu_perc", [.cpuPercent, .dockerCPUPercent]),
+      ("mem_perc", [.memoryPercent, .dockerMemoryPercent]),
+      ("mem_usage", [.memoryUsage, .dockerMemoryUsage]),
+      ("net_io", [.networkIO, .dockerNetworkIO]),
+      ("block_io", [.blockIO, .dockerBlockIO]),
+      ("pids", [.processCount, .dockerProcessCount]),
+    ].compactMap { field, keys in
+      keys.contains { key in
+        container.contains(key) && (try? container.decodeNil(forKey: key)) == false
+      } ? field : nil
+    })
     name = try container.decodeIfPresent(String.self, forKey: .name)
       ?? container.decodeIfPresent(String.self, forKey: .dockerName)
       ?? ""
@@ -409,6 +422,7 @@ struct ServerListItemInfo: Decodable, Equatable, Sendable {
   let region: String
   let address: String?
   let externalAddress: String?
+  let publicIP: String?
 
   enum CodingKeys: String, CodingKey {
     case state
@@ -418,6 +432,7 @@ struct ServerListItemInfo: Decodable, Equatable, Sendable {
     case region
     case address
     case externalAddress = "external_address"
+    case publicIP = "public_ip"
   }
 
   init(from decoder: Decoder) throws {
@@ -429,6 +444,7 @@ struct ServerListItemInfo: Decodable, Equatable, Sendable {
     region = try container.decodeIfPresent(String.self, forKey: .region) ?? ""
     address = try container.decodeIfPresent(String.self, forKey: .address)
     externalAddress = try container.decodeIfPresent(String.self, forKey: .externalAddress)
+    publicIP = try container.decodeIfPresent(String.self, forKey: .publicIP)
   }
 }
 
@@ -457,8 +473,9 @@ struct MinimalSystemStats: Decodable, Equatable, Sendable {
   let cpuPercent: Double
   let memoryUsedGB: Double
   let memoryTotalGB: Double
+  let availableFields: Set<String>
 
-  enum CodingKeys: String, CodingKey {
+  enum CodingKeys: String, CodingKey, CaseIterable {
     case cpuPercent = "cpu_perc"
     case memoryUsedGB = "mem_used_gb"
     case memoryTotalGB = "mem_total_gb"
@@ -466,6 +483,10 @@ struct MinimalSystemStats: Decodable, Equatable, Sendable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    availableFields = Set(CodingKeys.allCases.compactMap { key in
+      container.contains(key) && (try? container.decodeNil(forKey: key)) == false
+        ? key.rawValue : nil
+    })
     cpuPercent = try container.decodeIfPresent(Double.self, forKey: .cpuPercent) ?? 0
     memoryUsedGB = try container.decodeIfPresent(Double.self, forKey: .memoryUsedGB) ?? 0
     memoryTotalGB = try container.decodeIfPresent(Double.self, forKey: .memoryTotalGB) ?? 0
@@ -492,7 +513,7 @@ struct ServerDetail: Decodable, Equatable, Identifiable, Sendable {
     description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
     tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
     info = try container.decodeIfPresent(ServerInfo.self, forKey: .info) ?? ServerInfo()
-    config = try container.decodeIfPresent(ServerConfig.self, forKey: .config) ?? ServerConfig()
+    config = try container.decode(ServerConfig.self, forKey: .config)
   }
 }
 
@@ -525,8 +546,9 @@ struct ServerConfig: Decodable, Equatable, Sendable {
   let insecureTLS: Bool
   let autoPrune: Bool
   let statsMonitoring: Bool
+  let availableFields: Set<String>
 
-  enum CodingKeys: String, CodingKey {
+  enum CodingKeys: String, CodingKey, CaseIterable {
     case address
     case externalAddress = "external_address"
     case region, enabled
@@ -537,6 +559,10 @@ struct ServerConfig: Decodable, Equatable, Sendable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    availableFields = Set(CodingKeys.allCases.compactMap { key in
+      container.contains(key) && (try? container.decodeNil(forKey: key)) == false
+        ? key.rawValue : nil
+    })
     address = try container.decodeIfPresent(String.self, forKey: .address) ?? ""
     externalAddress = try container.decodeIfPresent(String.self, forKey: .externalAddress) ?? ""
     region = try container.decodeIfPresent(String.self, forKey: .region) ?? ""
@@ -549,6 +575,7 @@ struct ServerConfig: Decodable, Equatable, Sendable {
   init() {
     address = ""; externalAddress = ""; region = ""; enabled = true
     insecureTLS = false; autoPrune = false; statsMonitoring = true
+    availableFields = []
   }
 }
 
@@ -585,8 +612,9 @@ struct SystemStats: Decodable, Equatable, Sendable {
   let networkEgressBytes: Int64
   let refreshTimestamp: Int64
   let pollingRate: String
+  let availableFields: Set<String>
 
-  enum CodingKeys: String, CodingKey {
+  enum CodingKeys: String, CodingKey, CaseIterable {
     case cpuPercent = "cpu_perc"
     case loadAverage = "load_average"
     case memoryUsedGB = "mem_used_gb"
@@ -602,6 +630,11 @@ struct SystemStats: Decodable, Equatable, Sendable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    availableFields = Set(
+      CodingKeys.allCases.filter { key in
+        container.contains(key) && (try? container.decodeNil(forKey: key)) == false
+      }.map(\.rawValue)
+    )
     cpuPercent = try container.decodeIfPresent(Double.self, forKey: .cpuPercent) ?? 0
     loadAverage = try container.decodeIfPresent(SystemLoadAverage.self, forKey: .loadAverage)
       ?? SystemLoadAverage(one: 0, five: 0, fifteen: 0)
@@ -676,14 +709,28 @@ struct SystemStatsRecord: Decodable, Equatable, Identifiable, Sendable {
   let cpuPercent: Double
   let memoryUsedGB: Double
   let memoryTotalGB: Double
+  let availableFields: Set<String>
   var id: Int64 { timestamp }
 
-  enum CodingKeys: String, CodingKey {
+  enum CodingKeys: String, CodingKey, CaseIterable {
     case timestamp = "ts"
     case cpuPercent = "cpu_perc"
     case memoryUsedGB = "mem_used_gb"
     case memoryTotalGB = "mem_total_gb"
   }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    availableFields = Set(CodingKeys.allCases.compactMap { key in
+      container.contains(key) && (try? container.decodeNil(forKey: key)) == false
+        ? key.rawValue : nil
+    })
+    timestamp = try container.decodeIfPresent(Int64.self, forKey: .timestamp) ?? 0
+    cpuPercent = try container.decodeIfPresent(Double.self, forKey: .cpuPercent) ?? 0
+    memoryUsedGB = try container.decodeIfPresent(Double.self, forKey: .memoryUsedGB) ?? 0
+    memoryTotalGB = try container.decodeIfPresent(Double.self, forKey: .memoryTotalGB) ?? 0
+  }
+
 }
 
 struct HistoricalSystemStatsPage: Decodable, Equatable, Sendable {
@@ -693,6 +740,21 @@ struct HistoricalSystemStatsPage: Decodable, Equatable, Sendable {
   enum CodingKeys: String, CodingKey {
     case stats
     case nextPage = "next_page"
+  }
+}
+
+enum MetricFreshness {
+  static func measurementDate(for timestamp: Int64) -> Date {
+    Date(timeIntervalSince1970: TimeInterval(timestamp) / (timestamp > 10_000_000_000 ? 1_000 : 1))
+  }
+
+  static func isStale(
+    timestamp: Int64,
+    now: Date = .now,
+    after threshold: TimeInterval
+  ) -> Bool {
+    guard timestamp > 0 else { return false }
+    return now.timeIntervalSince(measurementDate(for: timestamp)) > threshold
   }
 }
 

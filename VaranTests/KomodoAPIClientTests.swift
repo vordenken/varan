@@ -8,6 +8,61 @@ final class KomodoAPIClientTests: XCTestCase {
     super.tearDown()
   }
 
+  func testServerListStatsDistinguishMissingMetricsFromReportedZero() throws {
+    let data = Data("""
+      [
+        {"id":"empty","name":"Empty","template":false,"tags":[],"info":{"state":"Ok","stats":{}}},
+        {"id":"zero","name":"Zero","template":false,"tags":[],"info":{"state":"Ok","public_ip":"203.0.113.10","stats":{"cpu_perc":0,"mem_used_gb":0,"mem_total_gb":16}}}
+      ]
+      """.utf8)
+
+    let servers = try JSONDecoder().decode([ServerListItem].self, from: data)
+
+    XCTAssertEqual(servers[0].info.stats?.availableFields, [])
+    XCTAssertEqual(
+      servers[1].info.stats?.availableFields,
+      ["cpu_perc", "mem_used_gb", "mem_total_gb"]
+    )
+    XCTAssertEqual(servers[1].info.stats?.cpuPercent, 0)
+    XCTAssertEqual(servers[1].info.stats?.memoryUsedGB, 0)
+    XCTAssertEqual(servers[1].info.publicIP, "203.0.113.10")
+  }
+
+  func testListAllServersLoadsPastFirstPage() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/read")
+      let body = try Self.bodyData(from: request)
+      let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      XCTAssertEqual(envelope["type"] as? String, "ListServers")
+      let parameters = try XCTUnwrap(envelope["params"] as? [String: Any])
+      XCTAssertEqual(parameters["limit"] as? Int, 50)
+      let page = try XCTUnwrap(parameters["page"] as? Int)
+      XCTAssertTrue(page == 0 || page == 1)
+      let indices = page == 0 ? 0..<50 : 50..<51
+      let servers = indices.map { index in
+        [
+          "id": "server-\(index)",
+          "name": "Server \(index)",
+          "template": false,
+          "tags": [],
+          "info": ["state": "Ok"],
+        ] as [String: Any]
+      }
+      let responseData = try JSONSerialization.data(withJSONObject: servers)
+      return Self.response(
+        for: request,
+        statusCode: 200,
+        body: try XCTUnwrap(String(data: responseData, encoding: .utf8))
+      )
+    }
+
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let servers = try await client.listAllServers()
+
+    XCTAssertEqual(servers.count, 51)
+    XCTAssertEqual(servers.last?.id, "server-50")
+  }
+
   func testConnectionUsesAPIKeyHeadersAndListStacksEnvelope() async throws {
     let requestExpectation = expectation(description: "Request received")
     MockURLProtocol.handler = { request in
@@ -371,6 +426,37 @@ final class KomodoAPIClientTests: XCTestCase {
     XCTAssertEqual(receivedTypes, ["DeleteStack", "DeleteServer"])
   }
 
+  func testServerWideActionsUseExecuteContracts() async throws {
+    var receivedTypes: [String] = []
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/execute")
+      let body = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      receivedTypes.append(try XCTUnwrap(body["type"] as? String))
+      let params = try XCTUnwrap(body["params"] as? [String: Any])
+      XCTAssertEqual(params["server"] as? String, "server-1")
+      XCTAssertEqual(params.count, 1)
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"update-1","success":true,"status":"Complete"}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    _ = try await client.startAllContainers(server: "server-1")
+    _ = try await client.restartAllContainers(server: "server-1")
+    _ = try await client.pauseAllContainers(server: "server-1")
+    _ = try await client.unpauseAllContainers(server: "server-1")
+    _ = try await client.stopAllContainers(server: "server-1")
+    _ = try await client.pruneBuildx(server: "server-1")
+    _ = try await client.pruneSystem(server: "server-1")
+
+    XCTAssertEqual(receivedTypes, [
+      "StartAllContainers", "RestartAllContainers", "PauseAllContainers",
+      "UnpauseAllContainers", "StopAllContainers", "PruneBuildx", "PruneSystem"
+    ])
+  }
+
   func testGetContainerLogUsesReadEndpointAndDecodesOutput() async throws {
     MockURLProtocol.handler = { request in
       let body = try Self.bodyData(from: request)
@@ -501,6 +587,27 @@ final class KomodoAPIClientTests: XCTestCase {
     } catch {
       XCTAssertEqual(error as? KomodoAPIError, .unauthorized)
       XCTAssertEqual(error.localizedDescription, "Die Zugangsdaten wurden abgelehnt.")
+    }
+  }
+
+  func testConnectionMapsValidationResponsesToTypedErrors() async throws {
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    for statusCode in [400, 422] {
+      MockURLProtocol.handler = { request in
+        Self.response(
+          for: request,
+          statusCode: statusCode,
+          body: #"{"error":"Invalid server address"}"#
+        )
+      }
+
+      do {
+        try await client.testConnection()
+        XCTFail("Expected a validation error for HTTP \(statusCode)")
+      } catch {
+        XCTAssertEqual(error as? KomodoAPIError, .validation(reason: "Invalid server address"))
+      }
     }
   }
 
@@ -679,6 +786,55 @@ final class KomodoAPIClientTests: XCTestCase {
     XCTAssertEqual(servers.first?.info.version, "1.19.0")
     XCTAssertEqual(stats.loadAverage.five, 0.2)
     XCTAssertEqual(stats.networkEgressBytes, 200)
+    XCTAssertTrue(stats.availableFields.contains("cpu_perc"))
+    XCTAssertTrue(stats.availableFields.contains("mem_total_gb"))
+    XCTAssertFalse(stats.availableFields.contains("future_metric"))
+  }
+
+  func testSystemStatsDistinguishesMissingAndNullFieldsFromZeroValues() throws {
+    let stats = try JSONDecoder().decode(
+      SystemStats.self,
+      from: Data(#"{"cpu_perc":0,"mem_used_gb":null,"refresh_ts":123}"#.utf8)
+    )
+
+    XCTAssertEqual(stats.cpuPercent, 0)
+    XCTAssertTrue(stats.availableFields.contains("cpu_perc"))
+    XCTAssertFalse(stats.availableFields.contains("mem_used_gb"))
+    XCTAssertFalse(stats.availableFields.contains("mem_total_gb"))
+    XCTAssertTrue(stats.availableFields.contains("refresh_ts"))
+  }
+
+  func testHistoricalStatsDistinguishMissingAndNullMetricsFromZero() throws {
+    let records = try JSONDecoder().decode(
+      [SystemStatsRecord].self,
+      from: Data(#"[{"ts":100,"cpu_perc":0,"mem_used_gb":null},{"ts":200,"mem_total_gb":8}]"#.utf8)
+    )
+
+    XCTAssertTrue(records[0].availableFields.contains("cpu_perc"))
+    XCTAssertFalse(records[0].availableFields.contains("mem_used_gb"))
+    XCTAssertFalse(records[0].availableFields.contains("mem_total_gb"))
+    XCTAssertFalse(records[1].availableFields.contains("cpu_perc"))
+    XCTAssertTrue(records[1].availableFields.contains("mem_total_gb"))
+    XCTAssertEqual(records[0].cpuPercent, 0)
+  }
+
+  func testMetricFreshnessHandlesSecondAndMillisecondTimestamps() {
+    let now = Date(timeIntervalSince1970: 1_000)
+
+    XCTAssertFalse(MetricFreshness.isStale(timestamp: 0, now: now, after: 100))
+    XCTAssertFalse(MetricFreshness.isStale(timestamp: 900, now: now, after: 100))
+    XCTAssertTrue(MetricFreshness.isStale(timestamp: 899, now: now, after: 100))
+    let millisecondTimestamp: Int64 = 900_000_000_000
+    let millisecondDate = Date(timeIntervalSince1970: 900_000_000)
+    XCTAssertFalse(MetricFreshness.isStale(
+      timestamp: millisecondTimestamp,
+      now: millisecondDate.addingTimeInterval(100),
+      after: 100
+    ))
+    XCTAssertEqual(
+      MetricFreshness.measurementDate(for: millisecondTimestamp),
+      millisecondDate
+    )
   }
 
   func testServerDetailHistoryAndContainerListUseReadContracts() async throws {
@@ -697,7 +853,7 @@ final class KomodoAPIClientTests: XCTestCase {
         return Self.response(for: request, statusCode: 200, body: """
           {"_id":"server-1","name":"Docker","description":"Primary","tags":["home"],
            "info":{"attempted_public_key":"old-key","public_key":"current-key"},
-           "config":{"address":"https://agent.local","region":"office","enabled":true}}
+           "config":{"address":"https://agent.local","external_address":"agent.example.com","region":"office","enabled":true}}
           """)
       case 2:
         XCTAssertEqual(json["type"] as? String, "GetHistoricalServerStats")
@@ -729,9 +885,27 @@ final class KomodoAPIClientTests: XCTestCase {
 
     XCTAssertEqual(server.info.attemptedPublicKey, "old-key")
     XCTAssertEqual(server.info.publicKey, "current-key")
+    XCTAssertEqual(server.config.externalAddress, "agent.example.com")
+    XCTAssertTrue(server.config.availableFields.contains("external_address"))
     XCTAssertEqual(history.stats.first?.cpuPercent, 20)
     XCTAssertEqual(history.nextPage, 3)
     XCTAssertEqual(containers.first?.name, "web")
+  }
+
+  func testGetServerRejectsResponseWithoutConfiguration() async throws {
+    MockURLProtocol.handler = { request in
+      Self.response(for: request, statusCode: 200, body: """
+        {"_id":"server-1","name":"Docker","info":{"state":"Ok"}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+
+    do {
+      _ = try await client.getServer(idOrName: "server-1")
+      XCTFail("GetServer must not invent an editable configuration")
+    } catch let error as KomodoAPIError {
+      XCTAssertEqual(error, .invalidPayload)
+    }
   }
 
   func testGetServerStateUsesReadContractAndDecodesKnownAndFutureStates() async throws {
@@ -946,6 +1120,30 @@ final class KomodoAPIClientTests: XCTestCase {
       """.utf8))
 
     XCTAssertNil(ContainerMemoryUsage.aggregate(stats))
+  }
+
+  func testContainerMemoryUnitsDistinguishDecimalAndBinaryPrefixes() throws {
+    let stats = try JSONDecoder().decode(ContainerStats.self, from: Data(#"{"mem_usage":"1GB / 2GiB"}"#.utf8))
+    let usage = try XCTUnwrap(stats.parsedMemoryUsage)
+
+    XCTAssertEqual(usage.usedBytes, 1_000_000_000)
+    XCTAssertEqual(usage.limitBytes, 2_147_483_648)
+    XCTAssertEqual(try XCTUnwrap(usage.percentage), 46.566, accuracy: 0.001)
+
+    let zeroLimitStats = try JSONDecoder().decode(ContainerStats.self, from: Data(#"{"mem_usage":"0B / 0B"}"#.utf8))
+    XCTAssertNil(zeroLimitStats.parsedMemoryUsage?.percentage)
+  }
+
+  func testContainerStatsDistinguishesMissingMetricsFromReportedZero() throws {
+    let stats = try JSONDecoder().decode(ContainerStats.self, from: Data("""
+      {"cpu_perc":0,"pids":0,"Name":"web"}
+      """.utf8))
+
+    XCTAssertTrue(stats.availableFields.contains("cpu_perc"))
+    XCTAssertTrue(stats.availableFields.contains("pids"))
+    XCTAssertFalse(stats.availableFields.contains("mem_usage"))
+    XCTAssertEqual(stats.cpuPercent, 0)
+    XCTAssertEqual(stats.processCount, 0)
   }
 
   private func makeClient(authentication: KomodoAuthentication) throws -> KomodoAPIClient {
