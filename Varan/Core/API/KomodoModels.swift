@@ -43,6 +43,8 @@ struct StackConfig: Decodable, Equatable, Sendable {
   let pollForUpdates: Bool
   let autoUpdate: Bool
 
+  let displayConfiguration: StackConfigurationDetails
+
   enum CodingKeys: String, CodingKey {
     case serverID = "server_id"
     case swarmID = "swarm_id"
@@ -57,6 +59,7 @@ struct StackConfig: Decodable, Equatable, Sendable {
   }
 
   init(from decoder: Decoder) throws {
+    displayConfiguration = try StackConfigurationDetails(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     serverID = try container.decodeIfPresent(String.self, forKey: .serverID) ?? ""
     swarmID = try container.decodeIfPresent(String.self, forKey: .swarmID) ?? ""
@@ -71,6 +74,7 @@ struct StackConfig: Decodable, Equatable, Sendable {
   }
 
   init() {
+    displayConfiguration = StackConfigurationDetails()
     serverID = ""
     swarmID = ""
     projectName = ""
@@ -90,6 +94,9 @@ struct StackInfo: Decodable, Equatable, Sendable {
   let deployedHash: String?
   let latestHash: String?
   let latestServices: [StackServiceNames]
+  let deployedContents: [StackFileSnapshot]?
+  let remoteContents: [StackFileSnapshot]?
+  let remoteErrors: [StackFileSnapshot]?
 
   enum CodingKeys: String, CodingKey {
     case missingFiles = "missing_files"
@@ -97,11 +104,17 @@ struct StackInfo: Decodable, Equatable, Sendable {
     case deployedHash = "deployed_hash"
     case latestHash = "latest_hash"
     case latestServices = "latest_services"
+    case deployedContents = "deployed_contents"
+    case remoteContents = "remote_contents"
+    case remoteErrors = "remote_errors"
   }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     missingFiles = try container.decodeIfPresent([String].self, forKey: .missingFiles) ?? []
+    deployedContents = try container.decodeIfPresent([StackFileSnapshot].self, forKey: .deployedContents)
+    remoteContents = try container.decodeIfPresent([StackFileSnapshot].self, forKey: .remoteContents)
+    remoteErrors = try container.decodeIfPresent([StackFileSnapshot].self, forKey: .remoteErrors)
     deployedProjectName = try container.decodeIfPresent(String.self, forKey: .deployedProjectName)
     deployedHash = try container.decodeIfPresent(String.self, forKey: .deployedHash)
     latestHash = try container.decodeIfPresent(String.self, forKey: .latestHash)
@@ -111,6 +124,9 @@ struct StackInfo: Decodable, Equatable, Sendable {
 
   init() {
     missingFiles = []
+    deployedContents = nil
+    remoteContents = nil
+    remoteErrors = nil
     deployedProjectName = nil
     deployedHash = nil
     latestHash = nil
@@ -548,6 +564,8 @@ struct ServerConfig: Decodable, Equatable, Sendable {
   let statsMonitoring: Bool
   let availableFields: Set<String>
 
+  let displayConfiguration: ServerConfigurationDetails
+
   enum CodingKeys: String, CodingKey, CaseIterable {
     case address
     case externalAddress = "external_address"
@@ -558,6 +576,7 @@ struct ServerConfig: Decodable, Equatable, Sendable {
   }
 
   init(from decoder: Decoder) throws {
+    displayConfiguration = try ServerConfigurationDetails(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     availableFields = Set(CodingKeys.allCases.compactMap { key in
       container.contains(key) && (try? container.decodeNil(forKey: key)) == false
@@ -573,6 +592,7 @@ struct ServerConfig: Decodable, Equatable, Sendable {
   }
 
   init() {
+    displayConfiguration = ServerConfigurationDetails()
     address = ""; externalAddress = ""; region = ""; enabled = true
     insecureTLS = false; autoPrune = false; statsMonitoring = true
     availableFields = []
@@ -767,6 +787,18 @@ struct ServerConfigPatch: Encodable, Equatable, Sendable {
   var autoPrune: Bool? = nil
   var statsMonitoring: Bool? = nil
 
+  var sendUnreachableAlerts: Bool? = nil
+  var sendCPUAlerts: Bool? = nil
+  var sendMemoryAlerts: Bool? = nil
+  var sendDiskAlerts: Bool? = nil
+  var sendVersionMismatchAlerts: Bool? = nil
+  var cpuWarning: Double? = nil
+  var cpuCritical: Double? = nil
+  var memoryWarning: Double? = nil
+  var memoryCritical: Double? = nil
+  var diskWarning: Double? = nil
+  var diskCritical: Double? = nil
+
   enum CodingKeys: String, CodingKey {
     case address
     case externalAddress = "external_address"
@@ -774,6 +806,17 @@ struct ServerConfigPatch: Encodable, Equatable, Sendable {
     case insecureTLS = "insecure_tls"
     case autoPrune = "auto_prune"
     case statsMonitoring = "stats_monitoring"
+    case sendUnreachableAlerts = "send_unreachable_alerts"
+    case sendCPUAlerts = "send_cpu_alerts"
+    case sendMemoryAlerts = "send_mem_alerts"
+    case sendDiskAlerts = "send_disk_alerts"
+    case sendVersionMismatchAlerts = "send_version_mismatch_alerts"
+    case cpuWarning = "cpu_warning"
+    case cpuCritical = "cpu_critical"
+    case memoryWarning = "mem_warning"
+    case memoryCritical = "mem_critical"
+    case diskWarning = "disk_warning"
+    case diskCritical = "disk_critical"
   }
 }
 
@@ -787,6 +830,16 @@ struct StackConfigPatch: Encodable, Equatable, Sendable {
   var pollForUpdates: Bool? = nil
   var autoUpdate: Bool? = nil
 
+  var filesOnHost: Bool? = nil
+  var fileContents: String? = nil
+  var runDirectory: String? = nil
+  var filePaths: [String]? = nil
+  var envFilePath: String? = nil
+  var environment: String? = nil
+  var gitProvider: String? = nil
+  var gitAccount: String? = nil
+  var gitHTTPS: Bool? = nil
+
   enum CodingKeys: String, CodingKey {
     case serverID = "server_id"
     case projectName = "project_name"
@@ -796,6 +849,15 @@ struct StackConfigPatch: Encodable, Equatable, Sendable {
     case autoPull = "auto_pull"
     case pollForUpdates = "poll_for_updates"
     case autoUpdate = "auto_update"
+    case filesOnHost = "files_on_host"
+    case fileContents = "file_contents"
+    case runDirectory = "run_directory"
+    case filePaths = "file_paths"
+    case envFilePath = "env_file_path"
+    case environment
+    case gitProvider = "git_provider"
+    case gitAccount = "git_account"
+    case gitHTTPS = "git_https"
   }
 }
 

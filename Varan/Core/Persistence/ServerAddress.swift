@@ -53,20 +53,16 @@ struct ServerAddress: Codable, Equatable, Sendable {
   }
 
   private static func isLocal(_ host: String) -> Bool {
-    host == "localhost"
-      || host == "::1"
-      || host.hasSuffix(".local")
-      || host.hasPrefix("127.")
-      || host.hasPrefix("10.")
-      || host.hasPrefix("192.168.")
-      || isPrivate172Address(host)
-  }
-
-  private static func isPrivate172Address(_ host: String) -> Bool {
-    let parts = host.split(separator: ".")
-    guard parts.count == 4, parts[0] == "172", let secondOctet = Int(parts[1]) else {
-      return false
+    if host == "localhost" || host == "::1" || host == "[::1]" || host.hasSuffix(".local") {
+      return true
     }
-    return (16...31).contains(secondOctet)
+    // Parse strictly so DNS names such as "10.example.com" are not treated as private IPs.
+    var address = in_addr()
+    guard inet_pton(AF_INET, host, &address) == 1 else { return false }
+    let octets = withUnsafeBytes(of: address.s_addr) { Array($0) }
+    return octets[0] == 127
+      || octets[0] == 10
+      || (octets[0] == 192 && octets[1] == 168)
+      || (octets[0] == 172 && (16...31).contains(octets[1]))
   }
 }

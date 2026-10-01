@@ -72,6 +72,27 @@ final class KomodoLiveUpdateTests: XCTestCase {
     controller.stop()
   }
 
+  func testRejectedLoginStopsReconnecting() async throws {
+    let first = MockLiveConnection()
+    let second = MockLiveConnection()
+    let transport = MockLiveTransport(connections: [first, second])
+    let controller = makeController(transport: transport)
+
+    controller.start(
+      address: try ServerAddress("https://komodo.example.com"),
+      authentication: .bearerToken("expired")
+    )
+    try await waitUntil { await first.sentMessages().count == 1 }
+    await first.enqueue("failed to authenticate user")
+    try await waitUntil { controller.loginRejected && controller.status == .offline }
+
+    try await Task.sleep(for: .milliseconds(50))
+    let connectionCount = await transport.connectionCount()
+    XCTAssertEqual(connectionCount, 1)
+    let firstClosed = await first.wasClosed()
+    XCTAssertTrue(firstClosed)
+  }
+
   func testStartingNewProfileClosesPreviousConnectionAndAvoidsDuplicates() async throws {
     let first = MockLiveConnection()
     let second = MockLiveConnection()

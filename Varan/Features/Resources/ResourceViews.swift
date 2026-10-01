@@ -173,6 +173,10 @@ struct LiveConnectionStatusButton: View {
           Text(retryError)
             .font(.caption)
             .foregroundStyle(.red)
+        } else if liveUpdates.loginRejected {
+          Text("status.loginRejected")
+            .font(.caption)
+            .foregroundStyle(.red)
         }
         Button("action.reconnect", systemImage: "arrow.trianglehead.2.clockwise.rotate.90") {
           Task { await reconnect() }
@@ -953,6 +957,15 @@ struct ServerDetailView: View {
           LabeledContent("field.publicIP", value: publicIP)
         }
         if let overviewRegion { LabeledContent("field.region", value: overviewRegion) }
+        NavigationLink {
+          if let server {
+            ServerConfigurationView(configuration: server.config.displayConfiguration)
+          }
+        } label: {
+          Label("title.configuration", systemImage: "slider.horizontal.3")
+        }
+        .disabled(server == nil)
+        .accessibilityIdentifier("server-configuration-link")
       }
       if let stats {
         Section("section.currentMetrics") {
@@ -2226,6 +2239,7 @@ struct ServerEditorView: View {
   @State private var insecureTLS: Bool
   @State private var autoPrune: Bool
   @State private var statsMonitoring: Bool
+  @State private var alertDraft: ServerAlertDraft
   @State private var showingReview = false
   @StateObject private var saveGate = EditorSaveGate()
   @State private var errorMessage: String?
@@ -2240,18 +2254,16 @@ struct ServerEditorView: View {
     _insecureTLS = State(initialValue: server?.config.insecureTLS ?? false)
     _autoPrune = State(initialValue: server?.config.autoPrune ?? false)
     _statsMonitoring = State(initialValue: server?.config.statsMonitoring ?? true)
+    _alertDraft = State(initialValue: ServerAlertDraft(original: server?.config.displayConfiguration))
   }
 
   var body: some View {
     Form {
       Section {
-        TextField("field.name", text: $name).disabled(server != nil)
-        TextField("field.address", text: $address)
-          .accessibilityIdentifier("server-editor-address-field")
-        TextField("field.externalAddress", text: $externalAddress)
-          .accessibilityIdentifier("server-editor-external-address-field")
-        TextField("field.region", text: $region)
-          .accessibilityIdentifier("server-editor-region-field")
+        ConfigurationTextField("field.name", text: $name).disabled(server != nil)
+        ConfigurationTextField("field.address", text: $address, explanation: "configuration.help.address", identifier: "server-editor-address-field")
+        ConfigurationTextField("field.externalAddress", text: $externalAddress, explanation: "configuration.help.externalAddress", identifier: "server-editor-external-address-field")
+        ConfigurationTextField("field.region", text: $region, identifier: "server-editor-region-field")
       } header: {
         Text("section.identity")
       } footer: {
@@ -2259,10 +2271,17 @@ struct ServerEditorView: View {
           Text("message.serverPublicIPIsNotExternalAddress")
         }
       }
-      Section("section.behavior") { Toggle("field.enabled", isOn: $enabled); Toggle("field.statsMonitoring", isOn: $statsMonitoring); Toggle("field.autoPrune", isOn: $autoPrune); Toggle("field.insecureTLS", isOn: $insecureTLS) }
+      Section("section.behavior") {
+        Toggle("field.enabled", isOn: $enabled)
+        ConfigurationToggle(title: "field.statsMonitoring", isOn: $statsMonitoring, explanation: "configuration.help.statsMonitoring")
+        ConfigurationToggle(title: "field.autoPrune", isOn: $autoPrune, explanation: "configuration.help.autoPrune")
+        ConfigurationToggle(title: "field.insecureTLS", isOn: $insecureTLS, explanation: "configuration.help.insecureTLS")
+      }
+      ServerAlertEditorSection(draft: $alertDraft)
       if !hasEditableConfiguration { Text("message.serverConfigurationIncomplete").foregroundStyle(.secondary) }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
     }
+    .disabled(saveGate.isSaving)
     .accessibilityIdentifier("server-editor-form")
     .navigationTitle(server == nil ? "title.newServer" : "title.editServer")
     .toolbar {
@@ -2280,6 +2299,7 @@ struct ServerEditorView: View {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
       && isValidConnectionAddress
       && hasEditableConfiguration
+      && alertDraft.validationMessageKey == nil
       && !changedFields.isEmpty
   }
 
@@ -2321,7 +2341,7 @@ struct ServerEditorView: View {
 
   private var changedFields: [String] {
     guard let old = server?.config else {
-      return ["field.name", "field.address", "field.externalAddress", "field.region", "section.behavior"].map { String(localized: String.LocalizationValue($0)) }
+      return ["field.name", "field.address", "field.externalAddress", "field.region", "section.behavior"].map { String(localized: String.LocalizationValue($0)) } + alertDraft.changedFields
     }
     return [
       Self.originalAddress(server: server, summary: summary) == address ? nil : String(localized: "field.address"),
@@ -2331,12 +2351,12 @@ struct ServerEditorView: View {
       old.insecureTLS == insecureTLS ? nil : String(localized: "field.insecureTLS"),
       old.autoPrune == autoPrune ? nil : String(localized: "field.autoPrune"),
       old.statsMonitoring == statsMonitoring ? nil : String(localized: "field.statsMonitoring")
-    ].compactMap { $0 }
+    ].compactMap { $0 } + alertDraft.changedFields
   }
 
   private var patch: ServerConfigPatch {
     let old = server?.config
-    return ServerConfigPatch(
+    var patch = ServerConfigPatch(
       address: Self.originalAddress(server: server, summary: summary) == address ? nil : address,
       externalAddress: Self.originalExternalAddress(server: server, summary: summary) == externalAddress ? nil : externalAddress,
       region: Self.originalRegion(server: server, summary: summary) == region ? nil : region,
@@ -2345,9 +2365,12 @@ struct ServerEditorView: View {
       autoPrune: old?.autoPrune == autoPrune ? nil : autoPrune,
       statsMonitoring: old?.statsMonitoring == statsMonitoring ? nil : statsMonitoring
     )
+    alertDraft.apply(to: &patch)
+    return patch
   }
 
   @MainActor private func save() async {
+    guard canSave else { return }
     do {
       try await saveGate.perform {
         let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
@@ -2369,11 +2392,15 @@ struct StackEditorView: View {
   @State private var name: String
   @State private var serverID: String
   @State private var projectName: String
-  @State private var repository: String
-  @State private var branch: String
+  @State private var composeDraft = StackComposeDraft()
+  @State private var isLoadingCompose = false
+  @State private var composeLoadError: String?
   @State private var autoPull: Bool
   @State private var pollForUpdates: Bool
   @State private var autoUpdate: Bool
+  @State private var servers: [ServerListItem] = []
+  @State private var isLoadingServers = true
+  @State private var serverLoadError: String?
   @State private var showingReview = false
   @StateObject private var saveGate = EditorSaveGate()
   @State private var errorMessage: String?
@@ -2381,17 +2408,58 @@ struct StackEditorView: View {
   init(profile: ServerProfile, keychainStore: KeychainStore, stack: StackDetail? = nil, onSaved: @escaping () -> Void) {
     self.profile = profile; self.keychainStore = keychainStore; self.stack = stack; self.onSaved = onSaved
     _name = State(initialValue: stack?.name ?? ""); _serverID = State(initialValue: stack?.config.serverID ?? "")
-    _projectName = State(initialValue: stack?.config.projectName ?? ""); _repository = State(initialValue: stack?.config.repository ?? "")
-    _branch = State(initialValue: stack?.config.branch ?? "main"); _autoPull = State(initialValue: stack?.config.autoPull ?? false)
+    _projectName = State(initialValue: stack?.config.projectName ?? "")
+    _isLoadingCompose = State(initialValue: stack != nil)
+    _autoPull = State(initialValue: stack?.config.autoPull ?? false)
     _pollForUpdates = State(initialValue: stack?.config.pollForUpdates ?? false); _autoUpdate = State(initialValue: stack?.config.autoUpdate ?? false)
   }
 
   var body: some View {
     Form {
-      Section("section.identity") { TextField("field.name", text: $name).disabled(stack != nil); TextField("field.serverID", text: $serverID); TextField("field.project", text: $projectName) }
-      Section("section.repository") { TextField("field.repository", text: $repository); TextField("field.branch", text: $branch).accessibilityIdentifier("stack-editor-branch-field"); Toggle("field.autoPull", isOn: $autoPull); Toggle("field.pollForUpdates", isOn: $pollForUpdates); Toggle("field.autoUpdate", isOn: $autoUpdate) }
+      Section("section.identity") {
+        ConfigurationTextField("field.name", text: $name).disabled(stack != nil)
+        serverPicker
+        ConfigurationTextField("field.project", text: $projectName, explanation: "configuration.help.projectName")
+      }
+      if isLoadingCompose {
+        Section("configuration.group.files") { ProgressView("stack.compose.loading") }
+      } else if let composeLoadError {
+        Section("configuration.group.files") {
+          Text(composeLoadError).foregroundStyle(.red)
+          Button("action.retry") { Task { await loadComposeConfiguration() } }
+        }
+      } else {
+        if composeDraft.source == .git || composeDraft.source == .linkedRepo || composeDraft.source == .unknown {
+          Section("section.repository") {
+            if composeDraft.source != .linkedRepo {
+              ConfigurationTextField("field.repository", text: $composeDraft.repository, explanation: "configuration.help.repository")
+            }
+            ConfigurationTextField("field.branch", text: $composeDraft.branch,
+              explanation: "configuration.help.branch", identifier: "stack-editor-branch-field")
+            if composeDraft.source == .git {
+              ConfigurationTextField("configuration.field.gitProvider", text: $composeDraft.gitProvider,
+                explanation: "configuration.help.gitProvider", identifier: "stack-editor-gitProvider")
+              ConfigurationTextField("configuration.field.gitAccount", text: $composeDraft.gitAccount,
+                explanation: "configuration.help.gitAccount", identifier: "stack-editor-gitAccount")
+            }
+          }
+        }
+        StackComposeEditorSection(draft: $composeDraft)
+      }
+      Section("section.behavior") {
+        ConfigurationToggle(title: "field.autoPull", isOn: $autoPull, explanation: "configuration.help.autoPull")
+        ConfigurationToggle(title: "field.pollForUpdates", isOn: $pollForUpdates, explanation: "configuration.help.pollForUpdates")
+        ConfigurationToggle(title: "field.autoUpdate", isOn: $autoUpdate, explanation: "configuration.help.autoUpdate")
+      }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
     }
+    .disabled(saveGate.isSaving)
+    .task(id: profile.id) {
+      async let servers: Void = loadServers()
+      async let compose: Void = loadComposeConfiguration()
+      _ = await (servers, compose)
+    }
+    .onDisappear { composeDraft = StackComposeDraft() }
     .navigationTitle(stack == nil ? "title.newStack" : "title.editStack")
     .toolbar {
       ToolbarItem(placement: .cancellationAction) { Button("action.cancel") { dismiss() }.disabled(saveGate.isSaving) }
@@ -2399,41 +2467,132 @@ struct StackEditorView: View {
     }
     .confirmationDialog("confirm.saveChanges.title", isPresented: $showingReview, titleVisibility: .visible) {
       Button("action.save") { Task { await save() } }; Button("action.cancel", role: .cancel) {}
-    } message: { Text(String(format: String(localized: "confirm.saveChanges.fields"), changedFields.joined(separator: ", "))) }
+    } message: { Text(reviewMessage) }
     .overlay { if saveGate.isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
   }
 
+  private var serverPicker: some View {
+    Group {
+      ConfigurationEditorField("field.server", explanation: "configuration.help.serverID") {
+        Picker("field.server", selection: $serverID) {
+          Text("stack.server.select").tag("")
+          if !serverID.isEmpty && !servers.contains(where: { selectionValue(for: $0) == serverID }) {
+            Text(String(format: String(localized: "stack.server.unavailable"), serverID))
+              .tag(serverID)
+          }
+          ForEach(servers) { server in
+            Text(server.name).tag(selectionValue(for: server))
+          }
+        }
+        .accessibilityIdentifier("stack-editor-server-picker")
+        .labelsHidden()
+        .accessibilityLabel("field.server")
+        .disabled(isLoadingServers || saveGate.isSaving || servers.isEmpty)
+      }
+      if isLoadingServers {
+        ProgressView("stack.server.loading")
+      } else if let serverLoadError {
+        Text(serverLoadError).foregroundStyle(.red)
+        Button("action.retry") { Task { await loadServers() } }
+          .disabled(saveGate.isSaving)
+      } else if servers.isEmpty {
+        Text("stack.server.empty").foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private func selectionValue(for server: ServerListItem) -> String {
+    // Preserve an existing name-based reference until the user changes the target.
+    if let original = stack?.config.serverID, original == server.id || original == server.name {
+      return original
+    }
+    return server.id
+  }
+
+  @MainActor private func loadServers() async {
+    guard !saveGate.isSaving else { return }
+    isLoadingServers = true
+    serverLoadError = nil
+    defer { isLoadingServers = false }
+    do {
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      let loaded = try await client.listAllServers()
+      try Task.checkCancellation()
+      servers = loaded.filter { !$0.template }.sorted {
+        let order = $0.name.localizedStandardCompare($1.name)
+        return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+      }
+    } catch is CancellationError {
+      return
+    } catch {
+      guard !Task.isCancelled else { return }
+      serverLoadError = error.localizedDescription
+    }
+  }
+
+  @MainActor private func loadComposeConfiguration() async {
+    guard let stack else { return }
+    isLoadingCompose = true
+    composeLoadError = nil
+    defer { isLoadingCompose = false }
+    do {
+      let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)
+      let configuration = try await client.getStackComposeConfiguration(idOrName: stack.id)
+      try Task.checkCancellation()
+      composeDraft = StackComposeDraft(original: configuration)
+    } catch is CancellationError {
+      return
+    } catch {
+      guard !Task.isCancelled else { return }
+      composeLoadError = error.localizedDescription
+    }
+  }
+
   private var canSave: Bool {
-    !name.trimmingCharacters(in: .whitespaces).isEmpty
+    !isLoadingCompose && composeLoadError == nil && composeDraft.validationMessageKey == nil
+      && !name.trimmingCharacters(in: .whitespaces).isEmpty
       && !serverID.trimmingCharacters(in: .whitespaces).isEmpty
       && !changedFields.isEmpty
   }
 
   private var changedFields: [String] {
     guard let old = stack?.config else {
-      return ["field.name", "field.serverID", "field.project", "field.repository", "field.branch"].map { String(localized: String.LocalizationValue($0)) }
+      return ["field.name", "field.server", "field.project"].map { String(localized: String.LocalizationValue($0)) }
+        + composeDraft.changedFields
     }
     return [
-      old.serverID == serverID ? nil : String(localized: "field.serverID"),
+      old.serverID == serverID ? nil : String(localized: "field.server"),
       old.projectName == projectName ? nil : String(localized: "field.project"),
-      old.repository == repository ? nil : String(localized: "field.repository"),
-      old.branch == branch ? nil : String(localized: "field.branch"),
       old.autoPull == autoPull ? nil : String(localized: "field.autoPull"),
       old.pollForUpdates == pollForUpdates ? nil : String(localized: "field.pollForUpdates"),
       old.autoUpdate == autoUpdate ? nil : String(localized: "field.autoUpdate")
-    ].compactMap { $0 }
+    ].compactMap { $0 } + composeDraft.changedFields
+  }
+
+  private var reviewMessage: String {
+    let fields = String(format: String(localized: "confirm.saveChanges.fields"), changedFields.joined(separator: ", "))
+    guard composeDraft.sourceChanged, let original = composeDraft.original else { return fields }
+    let sourceMessage = String(format: String(localized: "stack.compose.review.source"),
+      String(localized: String.LocalizationValue(original.source.localizationKey)),
+      String(localized: String.LocalizationValue(composeDraft.source.localizationKey)))
+    guard composeDraft.clearsInlineContents else { return fields + "\n\n" + sourceMessage }
+    return fields + "\n\n" + sourceMessage + "\n\n"
+      + String(localized: "stack.compose.review.clearsInlineContents")
   }
 
   private var patch: StackConfigPatch {
     let old = stack?.config
-    return StackConfigPatch(serverID: old?.serverID == serverID ? nil : serverID,
-      projectName: old?.projectName == projectName ? nil : projectName, linkedRepo: nil,
-      repository: old?.repository == repository ? nil : repository, branch: old?.branch == branch ? nil : branch,
-      autoPull: old?.autoPull == autoPull ? nil : autoPull, pollForUpdates: old?.pollForUpdates == pollForUpdates ? nil : pollForUpdates,
-      autoUpdate: old?.autoUpdate == autoUpdate ? nil : autoUpdate)
+    var patch = composeDraft.patch
+    patch.serverID = old?.serverID == serverID ? nil : serverID
+    patch.projectName = old?.projectName == projectName ? nil : projectName
+    patch.autoPull = old?.autoPull == autoPull ? nil : autoPull
+    patch.pollForUpdates = old?.pollForUpdates == pollForUpdates ? nil : pollForUpdates
+    patch.autoUpdate = old?.autoUpdate == autoUpdate ? nil : autoUpdate
+    return patch
   }
 
   @MainActor private func save() async {
+    guard canSave else { return }
     do {
       try await saveGate.perform {
         let client = try await makeKomodoClient(profile: profile, keychainStore: keychainStore)

@@ -74,6 +74,7 @@ struct StackDetailView: View {
   @ObservedObject var appSettings: AppSettings
 
   @State private var detail: StackDetail?
+  @State private var targetServerName: String?
   @State private var services: [StackService] = []
   @State private var loadState = LoadState.loading
   @State private var activeActionID: String?
@@ -82,6 +83,7 @@ struct StackDetailView: View {
   @State private var showingEditor = false
   @State private var pendingAction: StackResourceAction?
   @State private var logDestination: LogSource?
+  @State private var loadGeneration = 0
 
   var body: some View {
     Group {
@@ -201,6 +203,51 @@ struct StackDetailView: View {
     }
   }
 
+  private func deploymentComparisonSection(for stack: StackDetail) -> some View {
+    let comparison = StackDeploymentComparison(stack: stack)
+    return Section("stack.deployment.section") {
+      Label(
+        LocalizedStringKey(comparison.state.localizationKey),
+        systemImage: comparison.state == .noDifferences ? "checkmark.circle" : "info.circle"
+      )
+      .foregroundStyle(comparison.state == .deploymentRequired || comparison.state == .restartRequired ? Color.orange : Color.secondary)
+      .accessibilityIdentifier("stack-deployment-status")
+      DisclosureGroup("stack.deployment.details") {
+        if let names = comparison.projectNames, names.hasChanged {
+          Text("stack.deployment.projectChanged")
+          LabeledContent("stack.deployment.deployedProject", value: names.deployed)
+            .textSelection(.enabled)
+          LabeledContent("stack.deployment.savedProject", value: names.latest)
+            .textSelection(.enabled)
+        }
+        if let revisions = comparison.gitRevisions {
+          LabeledContent("stack.deployment.deployedRevision", value: revisions.deployed)
+            .textSelection(.enabled)
+          LabeledContent("stack.deployment.latestRevision", value: revisions.latest)
+            .textSelection(.enabled)
+          if revisions.hasChanged {
+            Text("stack.deployment.revisionDifference")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
+        }
+        ForEach(comparison.changedFiles, id: \.self) { path in
+          LabeledContent("stack.deployment.changedFile", value: path)
+            .textSelection(.enabled)
+        }
+        Text("stack.deployment.scope")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+        if comparison.hasIncompleteFileComparison {
+          Text("stack.deployment.incomplete")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .accessibilityIdentifier("stack-deployment-details")
+    }
+  }
+
   private var content: some View {
     List {
       Section("section.overview") {
@@ -217,6 +264,11 @@ struct StackDetailView: View {
         if let branch = detail?.config.branch, !branch.isEmpty {
           LabeledContent("field.branch", value: branch)
         }
+      }
+
+      if let detail {
+        deploymentComparisonSection(for: detail)
+        StackConfigurationSection(configuration: detail.config.displayConfiguration, serverName: targetServerName)
       }
 
       Section("section.services") {
@@ -351,7 +403,7 @@ struct StackDetailView: View {
   }
 
   private var hostName: String {
-    summary.info.swarmName.isEmpty ? summary.info.serverName : summary.info.swarmName
+    summary.info.swarmName.isEmpty ? (targetServerName ?? summary.info.serverName) : summary.info.swarmName
   }
 
   private var effectiveState: String {
@@ -472,17 +524,31 @@ struct StackDetailView: View {
 
   @MainActor
   private func loadContent(showProgress: Bool = true) async {
+    loadGeneration += 1
+    let generation = loadGeneration
     if showProgress { loadState = .loading }
     do {
       let client = try await makeClient()
       async let loadedDetail = client.getStack(idOrName: summary.id)
       async let loadedServices = client.listStackServices(stack: summary.id)
-      detail = try await loadedDetail
-      services = try await loadedServices
+      let stack = try await loadedDetail
+      let stackServices = try await loadedServices
+      // Name resolution is optional: a denied Server read must not hide the Stack.
+      let server: ServerDetail? = if stack.config.serverID.isEmpty {
+        nil
+      } else {
+        try? await client.getServer(idOrName: stack.config.serverID)
+      }
+      try Task.checkCancellation()
+      guard generation == loadGeneration else { return }
+      detail = stack
+      targetServerName = server.flatMap { $0.name.isEmpty ? nil : $0.name }
+      services = stackServices
       loadState = .loaded
     } catch is CancellationError {
       return
     } catch {
+      guard generation == loadGeneration else { return }
       loadState = .failed(localizedMessage(for: error))
     }
   }
@@ -888,6 +954,7 @@ struct LogViewerView: View {
   @State private var highlightedOutput = AttributedString()
   @State private var highlightedLines: [AttributedString] = []
   @State private var logRevision = 0
+  @State private var logGeneration = 0
   @State private var selectedServices: Set<String>
   @State private var tail = 200
 
@@ -1231,10 +1298,12 @@ struct LogViewerView: View {
 
   @MainActor
   private func loadLog(showProgress: Bool = true) async {
+    logGeneration += 1
+    let generation = logGeneration
     if showProgress {
       isLoading = true
     }
-    defer { isLoading = false }
+    defer { if generation == logGeneration { isLoading = false } }
     do {
       guard let credentials = try await keychainStore.credentials(
         for: profile.credentialAccount
@@ -1260,12 +1329,14 @@ struct LogViewerView: View {
           tail: tail
         )
       }
+      guard generation == logGeneration else { return }
       log = loadedLog
       logRevision += 1
       errorMessage = nil
     } catch is CancellationError {
       return
     } catch {
+      guard generation == logGeneration else { return }
       errorMessage =
         (error as? LocalizedError)?.errorDescription ?? String(localized: "error.logs.loadFailed")
     }

@@ -27,12 +27,15 @@ actor KeychainStore {
   func save(_ secret: String, for account: String) throws {
     let secretData = Data(secret.utf8)
     let query = baseQuery(account: account)
-    let attributes = [kSecValueData as String: secretData]
+    let attributes: [String: Any] = [
+      kSecValueData as String: secretData,
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
     let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
 
     if updateStatus == errSecItemNotFound {
       var newItem = query
-      newItem[kSecValueData as String] = secretData
+      newItem.merge(attributes) { _, new in new }
       let addStatus = SecItemAdd(newItem as CFDictionary, nil)
       guard addStatus == errSecSuccess else {
         throw KeychainStoreError.unexpectedStatus(addStatus)
@@ -72,7 +75,6 @@ actor KeychainStore {
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
-      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
     ]
   }
 }

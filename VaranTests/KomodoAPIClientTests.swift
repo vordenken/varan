@@ -3,6 +3,565 @@ import XCTest
 @testable import Varan
 
 final class KomodoAPIClientTests: XCTestCase {
+  func testServerAlertDraftEmitsOnlyChangedTypedFields() throws {
+    var draft = ServerAlertDraft()
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    draft.alerts[.cpu] = false
+    draft.thresholds[.memoryWarning] = "80,5"
+    var patch = ServerConfigPatch(region: "office")
+    draft.apply(to: &patch)
+    let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(patch)) as? [String: Any])
+    XCTAssertEqual(Set(fields.keys), ["region", "send_cpu_alerts", "mem_warning"])
+    XCTAssertEqual(fields["send_cpu_alerts"] as? Bool, false)
+    XCTAssertEqual(fields["mem_warning"] as? Double, 80.5)
+    XCTAssertEqual(draft.changedFields.count, 2)
+  }
+
+  func testServerAlertDraftPreservesUnknownAndUnchangedValues() throws {
+    let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(
+      #"{"send_cpu_alerts":false,"cpu_warning":0,"cpu_critical":99,"mem_warning":75,"mem_critical":null}"#.utf8
+    ))
+    var draft = ServerAlertDraft(original: configuration)
+    XCTAssertNil(draft.alerts[.disk])
+    XCTAssertEqual(draft.alerts[.cpu], false)
+    XCTAssertTrue(draft.canEdit(.cpuWarning))
+    XCTAssertFalse(draft.canEdit(.memoryWarning))
+    draft.thresholds[.cpuWarning] = "0,00"
+    draft.thresholds[.memoryWarning] = "80"
+    draft.alerts[.disk] = true
+    var patch = ServerConfigPatch()
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch())
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    XCTAssertNil(draft.validationMessageKey)
+  }
+
+  func testServerAlertThresholdValidationRejectsInvalidNumbersAndOrdering() {
+    for input in ["", "-1", "101", "NaN", "inf", "85%", "1,2.3", "9e1", "words"] {
+      var draft = ServerAlertDraft()
+      draft.thresholds[.cpuWarning] = input
+      XCTAssertEqual(draft.validationMessageKey, "server.alerts.validation.range", input)
+      var patch = ServerConfigPatch()
+      draft.apply(to: &patch)
+      XCTAssertEqual(patch, ServerConfigPatch())
+    }
+    for (warning, critical) in ServerAlertThreshold.pairs {
+      var draft = ServerAlertDraft()
+      draft.thresholds[warning] = "95"
+      draft.thresholds[critical] = "90"
+      XCTAssertEqual(draft.validationMessageKey, "server.alerts.validation.order")
+      draft.thresholds[critical] = "95"
+      XCTAssertNil(draft.validationMessageKey)
+      draft.thresholds[warning] = "0"
+      draft.thresholds[critical] = "100"
+      XCTAssertNil(draft.validationMessageKey)
+    }
+  }
+
+  func testServerAlertDraftAllowsUnrelatedEditsWithLegacyThresholds() throws {
+    let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(
+      #"{"send_disk_alerts":true,"cpu_warning":110,"cpu_critical":105}"#.utf8
+    ))
+    var draft = ServerAlertDraft(original: configuration)
+    draft.alerts[.disk] = false
+    XCTAssertNil(draft.validationMessageKey)
+    var patch = ServerConfigPatch()
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(sendDiskAlerts: false))
+    draft.thresholds[.cpuWarning] = "100"
+    XCTAssertEqual(draft.validationMessageKey, "server.alerts.validation.range")
+  }
+
+  func testServerAlertDraftPreservesSmallOriginalThresholdsWithoutFalseChanges() throws {
+    let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(
+      #"{"cpu_warning":0.000001,"cpu_critical":99,"send_cpu_alerts":true}"#.utf8
+    ))
+    var draft = ServerAlertDraft(original: configuration)
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    XCTAssertNil(draft.validationMessageKey)
+    draft.thresholds[.cpuCritical] = "98"
+    XCTAssertNil(draft.validationMessageKey)
+    var patch = ServerConfigPatch()
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(cpuCritical: 98))
+  }
+
+  func testServerAlertThresholdParserAcceptsBothDecimalSeparators() {
+    for input in ["85.5", "85,5", " 85,50 "] {
+      XCTAssertEqual(ServerAlertDraft.percentage(input), 85.5)
+    }
+    XCTAssertEqual(ServerAlertDraft.percentage(".5"), 0.5)
+    XCTAssertEqual(ServerAlertDraft.percentage(",5"), 0.5)
+    XCTAssertNil(ServerAlertDraft.percentage("1 000"))
+    XCTAssertNil(ServerAlertDraft.percentage("1,000,000"))
+  }
+
+  func testServerAlertSettingsUseWriteEndpointAndSnakeCaseFields() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(body["type"] as? String, "UpdateServer")
+      let params = try XCTUnwrap(body["params"] as? [String: Any])
+      XCTAssertEqual(params["id"] as? String, "server-1")
+      let config = try XCTUnwrap(params["config"] as? [String: Any])
+      XCTAssertEqual(Set(config.keys), ["send_unreachable_alerts", "send_cpu_alerts", "send_mem_alerts", "send_disk_alerts", "send_version_mismatch_alerts", "cpu_warning", "cpu_critical", "mem_warning", "mem_critical", "disk_warning", "disk_critical"])
+      XCTAssertEqual(config["cpu_warning"] as? Double, 80.5)
+      XCTAssertEqual(config["send_mem_alerts"] as? Bool, false)
+      return Self.response(for: request, statusCode: 200, body: #"{"_id":"server-1","name":"home","config":{"cpu_warning":80.5}}"#)
+    }
+    let client = try makeClient(authentication: .bearerToken("test-token"))
+    let server = try await client.updateServer(id: "server-1", config: ServerConfigPatch(
+      sendUnreachableAlerts: true, sendCPUAlerts: true, sendMemoryAlerts: false,
+      sendDiskAlerts: false, sendVersionMismatchAlerts: false, cpuWarning: 80.5,
+      cpuCritical: 99, memoryWarning: 75, memoryCritical: 95, diskWarning: 75, diskCritical: 95
+    ))
+    XCTAssertEqual(server.config.displayConfiguration.cpuWarning, 80.5)
+  }
+
+  private func deploymentStack(info: [String: Any], config: [String: Any] = [:]) throws -> StackDetail {
+    var configuration: [String: Any] = [
+      "files_on_host": true, "project_name": "home", "file_contents": ""
+    ]
+    configuration.merge(config) { _, new in new }
+    let data = try JSONSerialization.data(withJSONObject: [
+      "_id": "stack-1", "name": "home", "config": configuration, "info": info
+    ])
+    return try JSONDecoder().decode(StackDetail.self, from: data)
+  }
+
+  func testDeploymentComparisonDistinguishesDeployRestartAndIgnoredChanges() throws {
+    for (requirement, expected) in [
+      ("Redeploy", StackDeploymentComparison.State.deploymentRequired),
+      ("Restart", .restartRequired), ("None", .noDifferences)
+    ] {
+      let stack = try deploymentStack(info: [
+        "remote_errors": [], "deployed_contents": [["path": "app.conf", "contents": "old"]],
+        "remote_contents": [["path": "app.conf", "contents": "new", "requires": requirement]]
+      ])
+      let comparison = StackDeploymentComparison(stack: stack)
+      XCTAssertEqual(comparison.state, expected)
+      XCTAssertEqual(comparison.changedFiles, requirement == "None" ? [] : ["app.conf"])
+      XCTAssertFalse(comparison.hasIncompleteFileComparison)
+    }
+  }
+
+  func testDeploymentComparisonUsesCanonicalSnapshotsAfterDeploy() throws {
+    let deployed = [["path": "compose.yaml", "contents": "services: {}"]]
+    let pending = try deploymentStack(info: [
+      "remote_errors": [], "deployed_contents": deployed,
+      "remote_contents": [["path": "compose.yaml", "contents": "services: {web: {}}", "requires": "Redeploy"]]
+    ])
+    XCTAssertEqual(StackDeploymentComparison(stack: pending).state, .deploymentRequired)
+    let applied = try deploymentStack(info: [
+      "remote_errors": [], "deployed_contents": deployed,
+      "remote_contents": [["path": "compose.yaml", "contents": "services: {}", "requires": "Redeploy"]]
+    ])
+    XCTAssertEqual(StackDeploymentComparison(stack: applied).state, .noDifferences)
+  }
+
+  func testDeploymentComparisonHandlesNewFilesAndUnknownRequirements() throws {
+    let stack = try deploymentStack(info: [
+      "remote_errors": [], "deployed_contents": [["path": "old.yaml", "contents": "old"]],
+      "remote_contents": [["path": "new.yaml", "contents": "new", "requires": "None"]]
+    ])
+    XCTAssertEqual(StackDeploymentComparison(stack: stack).state, .deploymentRequired)
+    let unknown = try deploymentStack(info: [
+      "remote_errors": [], "deployed_contents": [["path": "app.conf", "contents": "old"]],
+      "remote_contents": [["path": "app.conf", "contents": "new", "requires": "Future"]]
+    ])
+    XCTAssertEqual(StackDeploymentComparison(stack: unknown).state, .unavailable)
+    XCTAssertTrue(StackDeploymentComparison(stack: unknown).hasIncompleteFileComparison)
+  }
+
+  func testDeploymentComparisonNeverTreatsMissingOrInvalidSnapshotsAsEquivalent() throws {
+    let file: [String: Any] = ["path": "compose.yaml", "contents": "same", "requires": "Redeploy"]
+    let invalid: [[String: Any]] = [
+      [:], ["remote_contents": [], "deployed_contents": [], "remote_errors": []],
+      ["remote_contents": [file], "remote_errors": []],
+      ["remote_contents": [file], "deployed_contents": [file], "remote_errors": [file]],
+      ["remote_contents": [file, file], "deployed_contents": [file], "remote_errors": []],
+      ["remote_contents": [file], "deployed_contents": [file], "remote_errors": [], "missing_files": ["missing.yaml"]]
+    ]
+    for info in invalid {
+      let comparison = StackDeploymentComparison(stack: try deploymentStack(info: info))
+      XCTAssertEqual(comparison.state, .unavailable)
+      XCTAssertTrue(comparison.hasIncompleteFileComparison)
+    }
+    let inline = try deploymentStack(info: [
+      "remote_contents": [file], "deployed_contents": [file], "remote_errors": []
+    ], config: ["files_on_host": false, "file_contents": "services: {}"])
+    XCTAssertEqual(StackDeploymentComparison(stack: inline).state, .unavailable)
+  }
+
+  func testDeploymentComparisonRetainsConcreteGitRevisionsAndProjectNames() throws {
+    let git: [String: Any] = ["files_on_host": false, "linked_repo": "", "repo": "org/app", "project_name": "renamed"]
+    let stack = try deploymentStack(info: [
+      "deployed_project_name": "original", "latest_hash": "new-commit", "deployed_hash": "old-commit"
+    ], config: git)
+    let comparison = StackDeploymentComparison(stack: stack)
+    XCTAssertEqual(comparison.projectNames, StackDeploymentValueComparison(deployed: "original", latest: "renamed"))
+    XCTAssertEqual(comparison.gitRevisions, StackDeploymentValueComparison(deployed: "old-commit", latest: "new-commit"))
+    XCTAssertTrue(comparison.projectNames?.hasChanged == true)
+    XCTAssertTrue(comparison.gitRevisions?.hasChanged == true)
+    XCTAssertEqual(comparison.state, .deploymentRequired)
+  }
+
+  func testDeploymentComparisonDoesNotInventMissingRevisionsOrUseLatentHostGitConfig() throws {
+    let git: [String: Any] = ["files_on_host": false, "linked_repo": "", "repo": "org/app"]
+    for info in [["latest_hash": "new"], ["deployed_hash": "old"], ["latest_hash": "", "deployed_hash": "old"]] {
+      let comparison = StackDeploymentComparison(stack: try deploymentStack(info: info, config: git))
+      XCTAssertNil(comparison.gitRevisions)
+    }
+    let host = try deploymentStack(info: ["latest_hash": "new", "deployed_hash": "old"])
+    XCTAssertNil(StackDeploymentComparison(stack: host).gitRevisions)
+    let fallback = try deploymentStack(info: ["deployed_project_name": "old"], config: ["project_name": ""])
+    XCTAssertEqual(StackDeploymentComparison(stack: fallback).projectNames?.latest, "home")
+  }
+
+  func testDeploymentComparisonSeparatesGitRevisionFromDeploymentRequirement() throws {
+    let git: [String: Any] = ["files_on_host": false, "linked_repo": "", "repo": "org/app"]
+    let revision = try deploymentStack(info: ["latest_hash": "bbb", "deployed_hash": "aaa"], config: git)
+    XCTAssertEqual(StackDeploymentComparison(stack: revision).state, .revisionAvailable)
+    let same = try deploymentStack(info: ["latest_hash": "aaa", "deployed_hash": "aaa"], config: git)
+    XCTAssertEqual(StackDeploymentComparison(stack: same).state, .unavailable)
+    let host = try deploymentStack(info: ["latest_hash": "bbb", "deployed_hash": "aaa"])
+    XCTAssertEqual(StackDeploymentComparison(stack: host).state, .unavailable)
+  }
+
+  func testDeploymentComparisonUsesProjectNameFallbackOnlyWhenReported() throws {
+    let changed = try deploymentStack(info: ["deployed_project_name": "previous"], config: ["project_name": ""])
+    XCTAssertTrue(StackDeploymentComparison(stack: changed).projectNameChanged)
+    XCTAssertEqual(StackDeploymentComparison(stack: changed).state, .deploymentRequired)
+    let same = try deploymentStack(info: ["deployed_project_name": "home"], config: ["project_name": ""])
+    XCTAssertFalse(StackDeploymentComparison(stack: same).projectNameChanged)
+    let partial = try JSONDecoder().decode(StackDetail.self, from: Data(#"{"_id":"s","name":"home","config":{},"info":{"deployed_project_name":"previous"}}"#.utf8))
+    XCTAssertEqual(StackDeploymentComparison(stack: partial).state, .unavailable)
+  }
+
+  func testDeploymentFileSnapshotsDoNotRetainSensitiveContents() throws {
+    let snapshot = try JSONDecoder().decode(StackFileSnapshot.self, from: Data(
+      #"{"path":".env","contents":"PASSWORD=private-value"}"#.utf8
+    ))
+    XCTAssertFalse(String(reflecting: snapshot).contains("private-value"))
+    XCTAssertFalse(String(describing: snapshot).contains("private-value"))
+    XCTAssertEqual(snapshot.path, ".env")
+    XCTAssertFalse(Mirror(reflecting: snapshot).children.contains { $0.value as? String == "PASSWORD=private-value" })
+  }
+
+  func testReadOnlyConfigurationPreservesOmittedNullEmptyAndDisabledValues() throws {
+    let empty = try JSONDecoder().decode(StackConfig.self, from: Data("{}".utf8))
+    XCTAssertNil(empty.displayConfiguration.autoPull)
+    XCTAssertNil(empty.displayConfiguration.filePaths)
+    XCTAssertEqual(empty.displayConfiguration.composeSourceLocalizationKey, "configuration.value.unavailable")
+
+    let partial = try JSONDecoder().decode(StackConfig.self, from: Data("""
+      {"server_id":"server-1","repo":"","auto_pull":false,"auto_update":null,"file_paths":[]}
+      """.utf8))
+    XCTAssertEqual(partial.displayConfiguration.repository, "")
+    XCTAssertEqual(partial.displayConfiguration.autoPull, false)
+    XCTAssertNil(partial.displayConfiguration.autoUpdate)
+    XCTAssertEqual(partial.displayConfiguration.filePaths?.values, [])
+    XCTAssertEqual(partial.serverID, "server-1")
+
+    let server = try JSONDecoder().decode(ServerConfig.self, from: Data("""
+      {"enabled":false,"cpu_warning":0,"mem_warning":null,"ignore_mounts":[]}
+      """.utf8))
+    XCTAssertEqual(server.displayConfiguration.enabled, false)
+    XCTAssertEqual(server.displayConfiguration.cpuWarning, 0)
+    XCTAssertNil(server.displayConfiguration.memoryWarning)
+    XCTAssertNil(server.displayConfiguration.sendCPUAlerts)
+    XCTAssertEqual(server.displayConfiguration.ignoreMounts?.values, [])
+    XCTAssertEqual(server.availableFields, ["enabled"])
+  }
+
+  func testComposeSourceRespectsPriorityAndIncompleteResponses() throws {
+    let cases: [(String, String)] = [
+      (#"{"files_on_host":true,"file_contents":"services: {}","linked_repo":"repo-1","repo":"org/repo"}"#, "host"),
+      (#"{"files_on_host":false,"file_contents":"services: {}","linked_repo":"repo-1","repo":"org/repo"}"#, "inline"),
+      (#"{"files_on_host":false,"file_contents":"","linked_repo":"repo-1","repo":"org/repo"}"#, "linkedRepo"),
+      (#"{"files_on_host":false,"file_contents":"","linked_repo":"","repo":"org/repo"}"#, "git"),
+      (#"{"files_on_host":false,"file_contents":"","linked_repo":"","repo":""}"#, "unconfigured"),
+    ]
+    for (json, source) in cases {
+      let configuration = try JSONDecoder().decode(StackConfigurationDetails.self, from: Data(json.utf8))
+      XCTAssertEqual(configuration.composeSourceLocalizationKey, "configuration.source.\(source)")
+    }
+    for json in [#"{"repo":"org/repo"}"#, #"{"files_on_host":false,"repo":"org/repo"}"#,
+                 #"{"files_on_host":false,"file_contents":"","repo":"org/repo"}"#] {
+      let configuration = try JSONDecoder().decode(StackConfigurationDetails.self, from: Data(json.utf8))
+      XCTAssertEqual(configuration.composeSourceLocalizationKey, "configuration.value.unavailable")
+    }
+  }
+
+  func testAdditionalStackFilesDecodeLegacyAndStructuredFormats() throws {
+    let config = try JSONDecoder().decode(StackConfigurationDetails.self, from: Data("""
+      {"run_directory":"/opt/stacks","env_file_path":".env",
+       "additional_env_files":["legacy.env",{"path":"external.env","track":false},{"path":"tracked.env"}],
+       "config_files":["legacy.conf",{"path":"web.conf","services":["web"],"requires":"Restart"},
+         {"path":"db.conf","service":"db\\nworker","req":"redeploy"},
+         {"path":"future.conf","requires":"FutureAction"}],
+       "ignore_services":"init\\n migrations", "auto_update_skip_services":["database"]}
+      """.utf8))
+    XCTAssertEqual(config.runDirectory, "/opt/stacks")
+    XCTAssertEqual(config.envFilePath, ".env")
+    XCTAssertEqual(config.additionalEnvFiles?.map(\.track), [true, false, true])
+    XCTAssertEqual(config.configFiles?.map(\.requires), ["None", "Restart", "Redeploy", "FutureAction"])
+    XCTAssertEqual(config.configFiles?[2].services?.values, ["db", "worker"])
+    XCTAssertEqual(config.ignoreServices?.values, ["init", "migrations"])
+    XCTAssertEqual(config.autoUpdateSkipServices?.values, ["database"])
+  }
+
+  func testSensitiveConfigurationRetainsPresenceWithoutContents() throws {
+    let stack = try JSONDecoder().decode(StackConfigurationDetails.self, from: Data("""
+      {"file_contents":"services: {password: dummy-sensitive-value}",
+       "environment":"PASSWORD=dummy-sensitive-value", "webhook_secret":"dummy-sensitive-value",
+       "extra_args":["--secret=dummy-sensitive-value"], "build_extra_args":[],
+       "compose_cmd_wrapper":"secret-tool dummy-sensitive-value [[COMPOSE_COMMAND]]",
+       "pre_deploy":{"path":"/opt/stack","command":"export TOKEN=dummy-sensitive-value","shell_mode":true},
+       "post_deploy":{"command":""}}
+      """.utf8))
+    XCTAssertEqual(stack.fileContents?.isConfigured, true)
+    XCTAssertEqual(stack.environment?.isConfigured, true)
+    XCTAssertEqual(stack.webhookSecret?.isConfigured, true)
+    XCTAssertEqual(stack.extraArgs?.isConfigured, true)
+    XCTAssertEqual(stack.buildExtraArgs?.isConfigured, false)
+    XCTAssertEqual(stack.composeCommandWrapper?.isConfigured, true)
+    XCTAssertEqual(stack.preDeploy?.path, "/opt/stack")
+    XCTAssertEqual(stack.preDeploy?.command?.isConfigured, true)
+    XCTAssertEqual(stack.preDeploy?.shellMode, true)
+    XCTAssertEqual(stack.postDeploy?.command?.isConfigured, false)
+    XCTAssertFalse(String(reflecting: stack).contains("dummy-sensitive-value"))
+
+    let server = try JSONDecoder().decode(ServerConfig.self, from: Data("""
+      {"passkey":"dummy-sensitive-value","auto_rotate_keys":false}
+      """.utf8))
+    XCTAssertEqual(server.displayConfiguration.passkey?.isConfigured, true)
+    XCTAssertEqual(server.displayConfiguration.autoRotateKeys, false)
+    XCTAssertFalse(String(reflecting: server).contains("dummy-sensitive-value"))
+  }
+
+  func testServerReadOnlySettingsAndMaintenanceDecode() throws {
+    let server = try JSONDecoder().decode(ServerConfig.self, from: Data("""
+      {"send_unreachable_alerts":true,"send_cpu_alerts":false,"send_mem_alerts":true,
+       "send_disk_alerts":true,"send_version_mismatch_alerts":false,
+       "cpu_warning":90,"cpu_critical":99,"mem_warning":75,"mem_critical":95,
+       "disk_warning":80.5,"disk_critical":97.5,"ignore_mounts":["/mnt/backup"],
+       "links":["https://example.com/status"],
+       "maintenance_windows":[{"name":"Weekly maintenance","description":"Patch host",
+         "schedule_type":"Weekly","day_of_week":"Monday","date":"", "hour":2,"minute":30,
+         "duration_minutes":45,"timezone":"Europe/Berlin","enabled":true}]}
+      """.utf8))
+    let config = server.displayConfiguration
+    XCTAssertEqual(config.sendCPUAlerts, false)
+    XCTAssertEqual(config.sendVersionMismatchAlerts, false)
+    XCTAssertEqual(config.cpuWarning, 90)
+    XCTAssertEqual(config.diskCritical, 97.5)
+    XCTAssertEqual(config.ignoreMounts?.values, ["/mnt/backup"])
+    XCTAssertEqual(config.links?.values, ["https://example.com/status"])
+    let window = try XCTUnwrap(config.maintenanceWindows?.first)
+    XCTAssertEqual(window.scheduleType, "Weekly")
+    XCTAssertEqual(window.dayOfWeek, "Monday")
+    XCTAssertEqual(window.hour, 2)
+    XCTAssertEqual(window.minute, 30)
+    XCTAssertEqual(window.durationMinutes, 45)
+    XCTAssertEqual(window.timezone, "Europe/Berlin")
+    XCTAssertEqual(window.enabled, true)
+  }
+
+  func testScreenshotConfigurationFixturesDecodeExpandedDetails() throws {
+    let stack = try JSONDecoder().decode(StackDetail.self, from: Data(ScreenshotDemo.stackDetailJSON.utf8))
+    let server = try JSONDecoder().decode(ServerDetail.self, from: Data(ScreenshotDemo.serverDetailJSON.utf8))
+    XCTAssertEqual(stack.config.displayConfiguration.composeSourceLocalizationKey, "configuration.source.git")
+    XCTAssertEqual(stack.config.displayConfiguration.runDirectory, "stacks/home")
+    XCTAssertEqual(server.config.displayConfiguration.cpuWarning, 90)
+    XCTAssertEqual(server.config.displayConfiguration.maintenanceWindows?.count, 1)
+  }
+
+  func testComposeConfigurationReadUsesGetStackAndKeepsContentsTransient() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/read")
+      XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "GetStack")
+      XCTAssertEqual((json["params"] as? [String: Any])?["stack"] as? String, "stack-1")
+      return Self.response(for: request, statusCode: 200, body: """
+        {"config":{"files_on_host":false,"file_contents":"services: {}","linked_repo":"","repo":"",
+          "environment":"TOKEN=dummy-sensitive-value","env_file_path":".env"}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let config = try await client.getStackComposeConfiguration(idOrName: "stack-1")
+    XCTAssertEqual(config.source, .komodo)
+    XCTAssertEqual(config.fileContents, "services: {}")
+    XCTAssertEqual(config.environment, "TOKEN=dummy-sensitive-value")
+    XCTAssertFalse(String(reflecting: config).contains("dummy-sensitive-value"))
+    XCTAssertFalse(String(reflecting: StackComposeDraft(original: config)).contains("dummy-sensitive-value"))
+  }
+
+  func testBranchOnlyComposeEditPreservesSourceFilesAndEnvironment() throws {
+    let original = try JSONDecoder().decode(StackComposeConfiguration.self, from: Data("""
+      {"files_on_host":false,"file_contents":"","linked_repo":"","repo":"org/app","branch":"main",
+       "run_directory":"stacks/app","file_paths":["compose.yaml","override.yaml"],
+       "env_file_path":"production.env","environment":"TOKEN=dummy-sensitive-value"}
+      """.utf8))
+    var draft = StackComposeDraft(original: original)
+    XCTAssertEqual(draft.source, .git)
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    draft.branch = "stable"
+    XCTAssertNil(draft.validationMessageKey)
+    let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft.patch)) as? [String: Any])
+    XCTAssertEqual(Set(payload.keys), ["branch"])
+    XCTAssertEqual(payload["branch"] as? String, "stable")
+  }
+
+  func testSourceSwitchToGitClearsOverridesThroughTypedPartialWrite() async throws {
+    let original = try JSONDecoder().decode(StackComposeConfiguration.self, from: Data("""
+      {"files_on_host":true,"file_contents":"old inline contents","linked_repo":"old-repo", "repo":"org/old"}
+      """.utf8))
+    var draft = StackComposeDraft(original: original)
+    draft.source = .git
+    draft.repository = "org/new"
+    draft.filePathsText = "compose.yaml\nproduction.yaml"
+    draft.environment = "MODE=production"
+    XCTAssertNil(draft.validationMessageKey)
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/write")
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      XCTAssertEqual(json["type"] as? String, "UpdateStack")
+      let params = try XCTUnwrap(json["params"] as? [String: Any])
+      XCTAssertEqual(params["id"] as? String, "stack-1")
+      let patch = try XCTUnwrap(params["config"] as? [String: Any])
+      XCTAssertEqual(patch["files_on_host"] as? Bool, false)
+      XCTAssertEqual(patch["file_contents"] as? String, "")
+      XCTAssertEqual(patch["linked_repo"] as? String, "")
+      XCTAssertEqual(patch["repo"] as? String, "org/new")
+      XCTAssertEqual(patch["git_https"] as? Bool, true)
+      XCTAssertEqual(patch["file_paths"] as? [String], ["compose.yaml", "production.yaml"])
+      XCTAssertEqual(patch["environment"] as? String, "MODE=production")
+      XCTAssertNil(patch["auto_update"])
+      return Self.response(for: request, statusCode: 200, body: """
+        {"_id":"stack-1","name":"Example","config":{"files_on_host":false,"file_contents":"","linked_repo":"","repo":"org/new"}}
+        """)
+    }
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    _ = try await client.updateStack(id: "stack-1", config: draft.patch)
+  }
+
+  func testSourceSwitchWarnsWheneverStoredInlineContentsAreCleared() throws {
+    for filesOnHost in [true, false] {
+      for contents in ["services: {}", ""] {
+        let original = try JSONDecoder().decode(StackComposeConfiguration.self, from: Data("""
+          {"files_on_host":\(filesOnHost),"file_contents":"\(contents)","linked_repo":"repo-1","repo":"org/app"}
+          """.utf8))
+        var draft = StackComposeDraft(original: original)
+        XCTAssertFalse(draft.clearsInlineContents)
+        for source in [StackComposeSource.git, .linkedRepo] {
+          draft.source = source
+          XCTAssertEqual(draft.clearsInlineContents, !contents.isEmpty)
+          XCTAssertEqual(draft.patch.fileContents, draft.sourceChanged ? "" : nil)
+        }
+        draft.source = .host
+        XCTAssertFalse(draft.clearsInlineContents)
+        XCTAssertNil(draft.patch.fileContents)
+      }
+    }
+  }
+
+  func testGitProviderRejectsURLsAndPreservesBareHostsAndPorts() {
+    var draft = StackComposeDraft()
+    draft.source = .git
+    draft.repository = "org/app"
+    for provider in ["https://git.example.com", "http://git.local", "https://git.example.com:8443",
+                     "git.example.com/", "git.example.com/path", " git.example.com", "git.example.com\n",
+                     "user:password@git.example.com", "git.example.com?token=value", "git.example.com#fragment", ""] {
+      draft.gitProvider = provider
+      XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.provider", provider)
+    }
+    for provider in ["github.com", "git.example.com:8443", "git.local", "10.0.0.1:3000", "[::1]:3000"] {
+      draft.gitProvider = provider
+      XCTAssertNil(draft.validationMessageKey, provider)
+      XCTAssertEqual(draft.patch.gitProvider, provider)
+      XCTAssertEqual(draft.patch.gitHTTPS, true)
+    }
+  }
+
+  func testInlineAndHostCreationProduceDistinctComposePayloads() throws {
+    var draft = StackComposeDraft()
+    XCTAssertNotNil(draft.validationMessageKey)
+    draft.fileContents = "services: {}"
+    XCTAssertNil(draft.validationMessageKey)
+    XCTAssertEqual(draft.patch.filesOnHost, false)
+    XCTAssertEqual(draft.patch.fileContents, "services: {}")
+    XCTAssertNil(draft.patch.repository)
+    XCTAssertNil(draft.patch.environment)
+
+    draft.source = .host
+    draft.runDirectory = "/opt/stacks/app"
+    draft.filePathsText = "compose.yaml\n compose.prod.yaml\n"
+    draft.envFilePath = "production.env"
+    draft.environment = "MODE=production"
+    XCTAssertNil(draft.validationMessageKey)
+    XCTAssertEqual(draft.patch.filesOnHost, true)
+    XCTAssertNil(draft.patch.fileContents)
+    XCTAssertEqual(draft.patch.runDirectory, "/opt/stacks/app")
+    XCTAssertEqual(draft.patch.filePaths, ["compose.yaml", "compose.prod.yaml"])
+    XCTAssertEqual(draft.patch.envFilePath, "production.env")
+    XCTAssertEqual(draft.patch.environment, "MODE=production")
+  }
+
+  func testComposeValidationRejectsInvalidChangedPathsAndRepositoryCredentials() throws {
+    var draft = StackComposeDraft()
+    draft.source = .host
+    for paths in ["/etc/compose.yaml", "../compose.yaml", "compose.yaml\ncompose.yaml"] {
+      draft.filePathsText = paths
+      XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.paths")
+    }
+    draft.filePathsText = "compose.yaml"
+    draft.envFilePath = "../secrets.env"
+    XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.envPath")
+    draft.envFilePath = ".env"
+    draft.source = .git
+    for repo in ["https://example.com/org/repo", "user:password@example.com/org/repo", "repo", "org/", "org/repo with space"] {
+      draft.repository = repo
+      XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.repository")
+    }
+    draft.repository = "org/repo"
+    draft.gitProvider = "http://example.com"
+    XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.provider")
+    draft.gitProvider = "github.com"
+    draft.runDirectory = "/opt/app"
+    XCTAssertEqual(draft.validationMessageKey, "stack.compose.validation.directory")
+    draft.runDirectory = "stacks/app"
+    XCTAssertNil(draft.validationMessageKey)
+  }
+
+  func testPartialAndLinkedRepoConfigurationStayUnmodifiedWhenUntouched() throws {
+    let partial = try JSONDecoder().decode(StackComposeConfiguration.self, from: Data("""
+      {"repo":"org/repo","branch":"main"}
+      """.utf8))
+    var draft = StackComposeDraft(original: partial)
+    XCTAssertEqual(draft.source, .unknown)
+    XCTAssertNil(draft.validationMessageKey)
+    XCTAssertEqual(try JSONEncoder().encode(draft.patch), Data("{}".utf8))
+    draft.branch = "stable"
+    XCTAssertEqual(draft.patch.branch, "stable")
+    XCTAssertNil(draft.patch.fileContents)
+    XCTAssertNil(draft.patch.filesOnHost)
+    XCTAssertNil(draft.patch.environment)
+
+    let linked = try JSONDecoder().decode(StackComposeConfiguration.self, from: Data("""
+      {"files_on_host":false,"file_contents":"","linked_repo":"repo-1","branch":"main"}
+      """.utf8))
+    draft = StackComposeDraft(original: linked)
+    XCTAssertEqual(draft.source, .linkedRepo)
+    draft.environment = "MODE=production"
+    XCTAssertEqual(draft.patch.environment, "MODE=production")
+    XCTAssertNil(draft.patch.linkedRepo)
+    XCTAssertNil(draft.patch.repository)
+    XCTAssertNil(draft.patch.fileContents)
+    XCTAssertFalse(draft.changedFields.contains("MODE=production"))
+  }
+
   override func tearDown() {
     MockURLProtocol.handler = nil
     super.tearDown()
@@ -1389,6 +1948,127 @@ final class KomodoAPIClientTests: XCTestCase {
     XCTAssertEqual(store.updates.map(\.id), ["update-new", "update-second"])
   }
 
+  @MainActor
+  func testResourceNameResolverBatchesCachesAndMarksMissingResources() async throws {
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let resolver = ResourceNameResolver()
+    let log = RequestLog()
+    MockURLProtocol.handler = { request in
+      let envelope = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      let type = try XCTUnwrap(envelope["type"] as? String)
+      let params = envelope["params"] as? [String: Any] ?? [:]
+      log.append(type)
+      switch type {
+      case "ListResourceSyncs":
+        return Self.response(for: request, statusCode: 200, body: #"[{"id":"sync-1","name":"infra"}]"#)
+      case "GetResourceSync":
+        XCTAssertEqual(params["sync"] as? String, "sync-gone")
+        return Self.response(for: request, statusCode: 500, body: #"{"error":"not found"}"#)
+      case "ListBuilds":
+        return Self.response(for: request, statusCode: 400, body: #"{"error":"unsupported"}"#)
+      case "GetBuild":
+        XCTAssertEqual(params["build"] as? String, "build-1")
+        return Self.response(for: request, statusCode: 200, body: #"{"_id":{"$oid":"build-1"},"name":"api"}"#)
+      default:
+        XCTFail("Unexpected request \(type)")
+        return Self.response(for: request, statusCode: 400, body: "{}")
+      }
+    }
+    let targets = [
+      KomodoNoticeTarget(type: "ResourceSync", id: "sync-1"),
+      KomodoNoticeTarget(type: "ResourceSync", id: "sync-gone"),
+      KomodoNoticeTarget(type: "Build", id: "build-1"),
+      KomodoNoticeTarget(type: "System", id: ""),
+    ]
+
+    await resolver.prefetch(targets, client: client)
+    XCTAssertEqual(resolver.resolution(for: targets[0]), .name("infra"))
+    XCTAssertEqual(resolver.resolution(for: targets[1]), .missing)
+    XCTAssertEqual(resolver.resolution(for: targets[2]), .name("api"))
+    XCTAssertNil(resolver.resolution(for: targets[3]))
+    XCTAssertEqual(log.count, 4)
+
+    await resolver.prefetch(targets, client: client)
+    XCTAssertEqual(log.count, 4)
+
+    resolver.invalidate()
+    XCTAssertEqual(resolver.resolution(for: targets[0]), .name("infra"))
+    await resolver.prefetch(targets, client: client)
+    XCTAssertEqual(log.count, 8)
+
+    resolver.reset()
+    XCTAssertNil(resolver.resolution(for: targets[0]))
+  }
+
+  @MainActor
+  func testResourceNameResolverDistinguishesMissingResourcesFromReadFailures() async throws {
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let target = KomodoNoticeTarget(type: "Build", id: "build-1")
+    let responses: [(Int, String, ResourceNameResolver.Resolution)] = [
+      (404, #"{"error":"not found"}"#, .missing),
+      (500, #"{"error":"not found"}"#, .missing),
+      (500, #"{"error":"Not Found"}"#, .missing),
+      (500, #"{"error":"Did not find any Build matching build-1"}"#, .missing),
+      (500, #"{"error":"Did not find any Build matching build-2"}"#, .unavailable),
+      (500, #"{"error":"Did not find any Server matching build-1"}"#, .unavailable),
+      (401, #"{"error":"unauthorized"}"#, .unavailable),
+      (403, #"{"error":"forbidden"}"#, .unavailable),
+      (400, #"{"error":"invalid request"}"#, .unavailable),
+      (422, #"{"error":"invalid resource identifier"}"#, .unavailable),
+      (500, #"{"error":"User does not have required permissions on this Build. Must have at least Read permissions"}"#, .unavailable),
+      (500, #"{"error":"database unavailable"}"#, .unavailable),
+      (500, #"{"error":"Compose file not found"}"#, .unavailable),
+      (500, #"{}"#, .unavailable),
+      (503, #"{"error":"not found"}"#, .unavailable)
+    ]
+    for (statusCode, body, expected) in responses {
+      let resolver = ResourceNameResolver()
+      MockURLProtocol.handler = { request in
+        Self.response(for: request, statusCode: statusCode, body: body)
+      }
+      let name = await resolver.name(for: target, client: client)
+      XCTAssertNil(name)
+      XCTAssertEqual(resolver.resolution(for: target), expected, "HTTP \(statusCode): \(body)")
+    }
+  }
+
+  @MainActor
+  func testResourceNameResolverReloadsCachedNamesWhenListEndpointFails() async throws {
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let resolver = ResourceNameResolver()
+    let log = RequestLog()
+    let target = KomodoNoticeTarget(type: "Build", id: "build-1")
+    let responses: [(String, ResourceNameResolver.Resolution)] = [
+      (#"{"name":"Original"}"#, .name("Original")),
+      (#"{"name":"Renamed"}"#, .name("Renamed")),
+      (#"{"error":"Did not find any Build matching build-1"}"#, .missing),
+      (#"{"name":"Restored"}"#, .name("Restored"))
+    ]
+    for (index, response) in responses.enumerated() {
+      let (body, expected) = response
+      MockURLProtocol.handler = { request in
+        let envelope = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+        )
+        let type = try XCTUnwrap(envelope["type"] as? String)
+        log.append(type)
+        if type == "ListBuilds" {
+          return Self.response(for: request, statusCode: 403, body: #"{"error":"forbidden"}"#)
+        }
+        XCTAssertEqual(type, "GetBuild")
+        return Self.response(for: request, statusCode: expected == .missing ? 500 : 200, body: body)
+      }
+      resolver.invalidate()
+      await resolver.prefetch([target], client: client)
+      XCTAssertEqual(resolver.resolution(for: target), expected)
+      XCTAssertEqual(log.count, (index + 1) * 2)
+      await resolver.prefetch([target], client: client)
+      XCTAssertEqual(log.count, (index + 1) * 2)
+    }
+  }
+
   private func makeClient(authentication: KomodoAuthentication) throws -> KomodoAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [MockURLProtocol.self]
@@ -1437,6 +2117,14 @@ final class KomodoAPIClientTests: XCTestCase {
     }
     return body
   }
+}
+
+private final class RequestLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var types: [String] = []
+
+  var count: Int { lock.withLock { types.count } }
+  func append(_ type: String) { lock.withLock { types.append(type) } }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

@@ -39,6 +39,15 @@
 		A1000000000000000000001E /* ResourceOverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* ResourceOverviewTests.swift */; };
 		A1000000000000000000001F /* NotificationInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* NotificationInboxView.swift */; };
 		A10000000000000000000020 /* SystemNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* SystemNotifications.swift */; };
+		A10000000000000000000038 /* ResourceNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038 /* ResourceNameResolver.swift */; };
+		A10000000000000000000030 /* ResourceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000030 /* ResourceConfiguration.swift */; };
+		A10000000000000000000031 /* ResourceConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000031 /* ResourceConfigurationView.swift */; };
+		A10000000000000000000032 /* StackComposeDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000032 /* StackComposeDraft.swift */; };
+		A10000000000000000000033 /* StackComposeEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000033 /* StackComposeEditorSection.swift */; };
+		A10000000000000000000034 /* StackDeploymentComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000034 /* StackDeploymentComparison.swift */; };
+		A10000000000000000000035 /* ServerAlertDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035 /* ServerAlertDraft.swift */; };
+		A10000000000000000000036 /* ServerAlertEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* ServerAlertEditorSection.swift */; };
+		A10000000000000000000037 /* ConfigurationEditorField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* ConfigurationEditorField.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -97,6 +106,15 @@
 		B10000000000000000000025 /* ResourceOverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceOverviewTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000026 /* NotificationInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationInboxView.swift; sourceTree = "<group>"; };
 		B10000000000000000000027 /* SystemNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNotifications.swift; sourceTree = "<group>"; };
+		B10000000000000000000038 /* ResourceNameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceNameResolver.swift; sourceTree = "<group>"; };
+		B10000000000000000000030 /* ResourceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceConfiguration.swift; sourceTree = "<group>"; };
+		B10000000000000000000031 /* ResourceConfigurationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceConfigurationView.swift; sourceTree = "<group>"; };
+		B10000000000000000000032 /* StackComposeDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackComposeDraft.swift; sourceTree = "<group>"; };
+		B10000000000000000000033 /* StackComposeEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackComposeEditorSection.swift; sourceTree = "<group>"; };
+		B10000000000000000000034 /* StackDeploymentComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackDeploymentComparison.swift; sourceTree = "<group>"; };
+		B10000000000000000000035 /* ServerAlertDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAlertDraft.swift; sourceTree = "<group>"; };
+		B10000000000000000000036 /* ServerAlertEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAlertEditorSection.swift; sourceTree = "<group>"; };
+		B10000000000000000000037 /* ConfigurationEditorField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationEditorField.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +186,10 @@
 				B10000000000000000000004 /* KomodoAPIClient.swift */,
 				B1000000000000000000001C /* KomodoLiveUpdates.swift */,
 				B10000000000000000000010 /* KomodoModels.swift */,
+				B10000000000000000000030 /* ResourceConfiguration.swift */,
+				B10000000000000000000032 /* StackComposeDraft.swift */,
+				B10000000000000000000035 /* ServerAlertDraft.swift */,
+				B10000000000000000000034 /* StackDeploymentComparison.swift */,
 			);
 			path = API;
 			sourceTree = "<group>";
@@ -292,6 +314,10 @@
 			isa = PBXGroup;
 			children = (
 				B1000000000000000000001B /* ResourceViews.swift */,
+				B10000000000000000000031 /* ResourceConfigurationView.swift */,
+				B10000000000000000000033 /* StackComposeEditorSection.swift */,
+				B10000000000000000000037 /* ConfigurationEditorField.swift */,
+				B10000000000000000000036 /* ServerAlertEditorSection.swift */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -301,6 +327,7 @@
 			children = (
 				B10000000000000000000026 /* NotificationInboxView.swift */,
 				B10000000000000000000027 /* SystemNotifications.swift */,
+				B10000000000000000000038 /* ResourceNameResolver.swift */,
 			);
 			path = Notifications;
 			sourceTree = "<group>";
@@ -460,11 +487,20 @@
 				A1000000000000000000000E /* StackListView.swift in Sources */,
 				A10000000000000000000011 /* StackDetailView.swift in Sources */,
 				A10000000000000000000014 /* ResourceViews.swift in Sources */,
+				A10000000000000000000033 /* StackComposeEditorSection.swift in Sources */,
+				A10000000000000000000037 /* ConfigurationEditorField.swift in Sources */,
+				A10000000000000000000036 /* ServerAlertEditorSection.swift in Sources */,
+				A10000000000000000000032 /* StackComposeDraft.swift in Sources */,
+				A10000000000000000000035 /* ServerAlertDraft.swift in Sources */,
+				A10000000000000000000034 /* StackDeploymentComparison.swift in Sources */,
+				A10000000000000000000031 /* ResourceConfigurationView.swift in Sources */,
+				A10000000000000000000030 /* ResourceConfiguration.swift in Sources */,
 				A10000000000000000000015 /* KomodoLiveUpdates.swift in Sources */,
 				A10000000000000000000017 /* AppSettings.swift in Sources */,
 				A10000000000000000000018 /* SettingsView.swift in Sources */,
 				A1000000000000000000001F /* NotificationInboxView.swift in Sources */,
 				A10000000000000000000020 /* SystemNotifications.swift in Sources */,
+				A10000000000000000000038 /* ResourceNameResolver.swift in Sources */,
 				A1000000000000000000001A /* ScreenshotDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -562,7 +598,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -591,7 +627,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
