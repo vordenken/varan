@@ -1,7 +1,15 @@
 import SwiftData
 import SwiftUI
 
+#if os(macOS)
+private enum MacSidebarSelection: Hashable {
+  case profile(UUID)
+  case notifications
+}
+#endif
+
 struct AppShellView: View {
+  @ObservedObject private var notificationRoutes = NotificationRouteCenter.shared
   private struct ProfileEditorPresentation: Identifiable {
     let profile: ServerProfile
     let credentials: StoredCredentials
@@ -10,6 +18,7 @@ struct AppShellView: View {
   }
 
   @Environment(\.modelContext) private var modelContext
+  @Environment(\.scenePhase) private var scenePhase
   @Query(sort: \ServerProfile.name) private var profiles: [ServerProfile]
   @State private var selectedProfileID: UUID?
   @State private var selectedProfileRevision = 0
@@ -18,6 +27,11 @@ struct AppShellView: View {
   @State private var profileEditorPresentation: ProfileEditorPresentation?
   @State private var errorTitle = String(localized: "alert.deleteConnection.failed")
   @State private var errorMessage: String?
+#if os(macOS)
+  @State private var sidebarSelection: MacSidebarSelection?
+  @StateObject private var notificationInbox = NotificationInboxStore()
+  @StateObject private var notificationLiveUpdates = KomodoLiveUpdateController()
+#endif
 
   private let keychainStore: KeychainStore
   @ObservedObject private var appSettings: AppSettings
@@ -54,10 +68,10 @@ struct AppShellView: View {
         )
 #else
         NavigationSplitView {
-          List(selection: $selectedProfileID) {
+          List(selection: $sidebarSelection) {
             Section("section.connections") {
               ForEach(profiles) { profile in
-                NavigationLink(value: profile.id) {
+                NavigationLink(value: MacSidebarSelection.profile(profile.id)) {
                   Label {
                     VStack(alignment: .leading, spacing: 2) {
                       Text(profile.name)
@@ -93,6 +107,19 @@ struct AppShellView: View {
               }
               .onDelete(perform: deleteProfiles)
             }
+            Section {
+              NavigationLink(value: MacSidebarSelection.notifications) {
+                HStack {
+                  Label("title.notifications", systemImage: "bell")
+                  Spacer()
+                  if notificationInbox.unreadCount > 0 {
+                    Text(notificationInbox.unreadCount, format: .number)
+                      .font(.caption.bold())
+                      .foregroundStyle(.secondary)
+                  }
+                }
+              }
+            }
           }
           .navigationTitle("Varan")
           .toolbar {
@@ -108,7 +135,13 @@ struct AppShellView: View {
           }
         } detail: {
           NavigationStack {
-            if let selectedProfile {
+            if sidebarSelection == .notifications, let selectedProfile {
+              NotificationInboxView(
+                store: notificationInbox, profile: selectedProfile,
+                keychainStore: keychainStore, appSettings: appSettings
+              )
+              .environmentObject(notificationLiveUpdates)
+            } else if let selectedProfile {
               ResourceBrowserView(
                 profile: selectedProfile,
                 keychainStore: keychainStore,
@@ -127,6 +160,36 @@ struct AppShellView: View {
         .task {
           if selectedProfileID == nil {
             selectedProfileID = profiles.first?.id
+          }
+          if let selectedProfileID, sidebarSelection == nil {
+            sidebarSelection = .profile(selectedProfileID)
+          }
+        }
+        .task(id: "\(selectedProfileID?.uuidString ?? "none")-\(scenePhase)") {
+          guard scenePhase == .active, let selectedProfile else { return }
+          await notificationInbox.monitor(
+            profile: selectedProfile, keychainStore: keychainStore, settings: appSettings
+          )
+        }
+        .task(id: "\(selectedProfileID?.uuidString ?? "none")-\(scenePhase)-\(sidebarSelection == .notifications)-\(appSettings.liveUpdatesEnabled)") {
+          await connectNotificationLiveUpdates()
+        }
+        .onReceive(notificationLiveUpdates.$latestEvent.compactMap { $0 }) { _ in
+          if let selectedProfileID {
+            notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+          }
+        }
+        .onReceive(notificationLiveUpdates.$refreshGeneration) { generation in
+          if generation > 0, let selectedProfileID {
+            notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+          }
+        }
+        .onChange(of: sidebarSelection) { _, selection in
+          if case .profile(let id) = selection { selectedProfileID = id }
+        }
+        .onChange(of: selectedProfileID) { _, id in
+          if let id, sidebarSelection != .notifications {
+            sidebarSelection = .profile(id)
           }
         }
 #endif
@@ -172,6 +235,19 @@ struct AppShellView: View {
     } message: {
       Text(errorMessage ?? String(localized: "error.unknown"))
     }
+    .onReceive(notificationRoutes.$pendingDestination.compactMap { $0 }) { destination in
+      guard profiles.contains(where: { $0.id == destination.profileID }) else { return }
+      selectedProfileID = destination.profileID
+#if os(macOS)
+      sidebarSelection = .notifications
+#endif
+    }
+#if os(macOS)
+    .onReceive(NotificationCenter.default.publisher(for: .varanConnectionSaved)) { notification in
+      guard let profile = notification.object as? ServerProfile else { return }
+      Task { await notificationInbox.connectionDidChange(profile: profile) }
+    }
+#endif
   }
 
   private var selectedProfile: ServerProfile? {
@@ -226,6 +302,33 @@ struct AppShellView: View {
       }
     }
   }
+
+#if os(macOS)
+  @MainActor
+  private func connectNotificationLiveUpdates() async {
+    guard sidebarSelection == .notifications, scenePhase == .active,
+          appSettings.liveUpdatesEnabled, let selectedProfile else {
+      notificationLiveUpdates.stop()
+      return
+    }
+    do {
+      guard let credentials = try await keychainStore.credentials(
+        for: selectedProfile.credentialAccount
+      ), credentials.authenticationKind == selectedProfile.authenticationKind else {
+        throw KeychainStoreError.invalidCredentialData
+      }
+      guard !Task.isCancelled, scenePhase == .active,
+            sidebarSelection == .notifications,
+            selectedProfileID == selectedProfile.id else { return }
+      notificationLiveUpdates.start(
+        address: try selectedProfile.address,
+        authentication: credentials.authentication
+      )
+    } catch {
+      notificationLiveUpdates.stop()
+    }
+  }
+#endif
 }
 
 private struct OnboardingView: View {
@@ -384,6 +487,7 @@ private enum AppTab: Hashable {
   case servers
   case stacks
   case containers
+  case notifications
   case settings
 
   init(defaultSection: DefaultResourceSection) {
@@ -396,6 +500,7 @@ private enum AppTab: Hashable {
 }
 
 private struct MobileAppShellView: View {
+  @ObservedObject private var notificationRoutes = NotificationRouteCenter.shared
   @Environment(\.scenePhase) private var scenePhase
   let profiles: [ServerProfile]
   @Binding var selectedProfileID: UUID?
@@ -403,6 +508,7 @@ private struct MobileAppShellView: View {
   @ObservedObject var appSettings: AppSettings
 
   @StateObject private var liveUpdates = KomodoLiveUpdateController()
+  @StateObject private var notificationInbox = NotificationInboxStore()
   @State private var selectedTab: AppTab
 
   init(
@@ -433,6 +539,30 @@ private struct MobileAppShellView: View {
         await connectLiveUpdates()
       }
       .task(id: refreshScheduleID) { configureRefreshIntervals() }
+      .task(id: "\(selectedProfileID?.uuidString ?? "none")-\(scenePhase)") {
+        guard scenePhase == .active, let selectedProfile else { return }
+        await notificationInbox.monitor(
+          profile: selectedProfile, keychainStore: keychainStore, settings: appSettings
+        )
+      }
+      .onReceive(notificationRoutes.$pendingDestination.compactMap { $0 }) { destination in
+        guard profiles.contains(where: { $0.id == destination.profileID }) else { return }
+        selectedTab = .notifications
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .varanConnectionSaved)) { notification in
+        guard let profile = notification.object as? ServerProfile else { return }
+        Task { await notificationInbox.connectionDidChange(profile: profile) }
+      }
+      .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { _ in
+        if let selectedProfileID {
+          notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+        }
+      }
+      .onReceive(liveUpdates.$refreshGeneration) { generation in
+        if generation > 0, let selectedProfileID {
+          notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+        }
+      }
       .onChange(of: scenePhase) { _, newPhase in
         guard appSettings.liveUpdatesEnabled else {
           liveUpdates.stop()
@@ -512,6 +642,22 @@ private struct MobileAppShellView: View {
         }
         .id(selectedProfileID)
       }
+
+      Tab("title.notifications", systemImage: "bell.fill", value: AppTab.notifications) {
+        NavigationStack {
+          if let selectedProfile {
+            NotificationInboxView(
+              store: notificationInbox, profile: selectedProfile,
+              keychainStore: keychainStore, appSettings: appSettings
+            )
+              .toolbar {
+                ToolbarItem(placement: .topBarLeading) { connectionMenu }
+              }
+          }
+        }
+        .id(selectedProfileID)
+      }
+      .badge(notificationInbox.unreadCount)
 
       Tab("settings.title", systemImage: "gearshape.fill", value: AppTab.settings) {
         NavigationStack {

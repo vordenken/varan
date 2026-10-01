@@ -69,6 +69,21 @@ actor KomodoAPIClient {
 
   private struct StackQuery: Encodable {}
   private struct ServerQuery: Encodable {}
+  private struct NoticePageParameters: Encodable {
+    let page: Int
+  }
+  private struct NoticeQueryParameters<Query: Encodable>: Encodable {
+    let page: Int
+    let query: Query
+  }
+  private struct OpenAlertQuery: Encodable { let resolved = false }
+  private struct FailedUpdateQuery: Encodable {
+    let status = "Complete"
+    let success = false
+  }
+  private struct NoticeIDParameters: Encodable {
+    let id: String
+  }
 
   private struct ListStacksParameters: Encodable {
     let query: StackQuery
@@ -496,6 +511,36 @@ actor KomodoAPIClient {
         timestamps: timestamps
       )
     )
+  }
+
+  func listAlerts(page: Int = 0) async throws -> KomodoAlertPage {
+    try await read(type: "ListAlerts", parameters: NoticePageParameters(page: page))
+  }
+
+  func listOpenAlerts(page: Int = 0) async throws -> KomodoAlertPage {
+    try await read(
+      type: "ListAlerts",
+      parameters: NoticeQueryParameters(page: page, query: OpenAlertQuery())
+    )
+  }
+
+  func getAlert(id: String) async throws -> KomodoAlert {
+    try await read(type: "GetAlert", parameters: NoticeIDParameters(id: id))
+  }
+
+  func listUpdates(page: Int = 0) async throws -> KomodoUpdatePage {
+    try await read(type: "ListUpdates", parameters: NoticePageParameters(page: page))
+  }
+
+  func listFailedUpdates(page: Int = 0) async throws -> KomodoUpdatePage {
+    try await read(
+      type: "ListUpdates",
+      parameters: NoticeQueryParameters(page: page, query: FailedUpdateQuery())
+    )
+  }
+
+  func getUpdate(id: String) async throws -> KomodoUpdateDetail {
+    try await read(type: "GetUpdate", parameters: NoticeIDParameters(id: id))
   }
 
   private func read<Response: Decodable, Parameters: Encodable>(

@@ -48,6 +48,9 @@ final class AppSettings: ObservableObject {
     static let logRefreshInterval = "settings.logRefreshInterval"
     static let logsFollowLatest = "settings.logsFollowLatest"
     static let defaultResourceSection = "settings.defaultResourceSection"
+    static let systemNotificationsEnabled = "settings.systemNotificationsEnabled"
+    static let criticalAlertNotificationsEnabled = "settings.criticalAlertNotificationsEnabled"
+    static let failedUpdateNotificationsEnabled = "settings.failedUpdateNotificationsEnabled"
 
     static let all = [
       liveUpdatesEnabled,
@@ -57,6 +60,9 @@ final class AppSettings: ObservableObject {
       logRefreshInterval,
       logsFollowLatest,
       defaultResourceSection,
+      systemNotificationsEnabled,
+      criticalAlertNotificationsEnabled,
+      failedUpdateNotificationsEnabled,
     ]
   }
 
@@ -77,6 +83,15 @@ final class AppSettings: ObservableObject {
   }
   @Published var defaultResourceSection: DefaultResourceSection {
     didSet { defaults.set(defaultResourceSection.rawValue, forKey: Key.defaultResourceSection) }
+  }
+  @Published var systemNotificationsEnabled: Bool {
+    didSet { defaults.set(systemNotificationsEnabled, forKey: Key.systemNotificationsEnabled) }
+  }
+  @Published var criticalAlertNotificationsEnabled: Bool {
+    didSet { defaults.set(criticalAlertNotificationsEnabled, forKey: Key.criticalAlertNotificationsEnabled) }
+  }
+  @Published var failedUpdateNotificationsEnabled: Bool {
+    didSet { defaults.set(failedUpdateNotificationsEnabled, forKey: Key.failedUpdateNotificationsEnabled) }
   }
 
   private let defaults: UserDefaults
@@ -116,6 +131,15 @@ final class AppSettings: ObservableObject {
     defaultResourceSection = DefaultResourceSection(
       rawValue: defaults.string(forKey: Key.defaultResourceSection) ?? ""
     ) ?? .stacks
+    systemNotificationsEnabled = Self.bool(
+      forKey: Key.systemNotificationsEnabled, defaultValue: false, defaults: defaults
+    )
+    criticalAlertNotificationsEnabled = Self.bool(
+      forKey: Key.criticalAlertNotificationsEnabled, defaultValue: true, defaults: defaults
+    )
+    failedUpdateNotificationsEnabled = Self.bool(
+      forKey: Key.failedUpdateNotificationsEnabled, defaultValue: true, defaults: defaults
+    )
   }
 
   func reset() {
@@ -126,6 +150,9 @@ final class AppSettings: ObservableObject {
     logRefreshInterval = .fiveSeconds
     logsFollowLatest = true
     defaultResourceSection = .stacks
+    systemNotificationsEnabled = false
+    criticalAlertNotificationsEnabled = true
+    failedUpdateNotificationsEnabled = true
   }
 
   private static func bool(

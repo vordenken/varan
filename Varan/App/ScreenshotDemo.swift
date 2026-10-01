@@ -120,6 +120,20 @@ enum ScreenshotDemo {
   static let logJSON = """
   {"stage":"container_log","command":"docker logs","stdout":"2026-09-21T09:38:14Z Server started on port 8080\\n2026-09-21T09:38:15Z Connected to database\\n2026-09-21T09:39:02Z GET /health 200 4ms\\n2026-09-21T09:40:17Z GET /api/status 200 12ms\\n2026-09-21T09:41:03Z Background sync completed","stderr":"","success":true,"start_ts":1789983494,"end_ts":1789983663}
   """
+
+  static let alertsJSON = """
+  {"alerts":[
+    {"_id":"alert-disk","ts":1789983663000,"resolved":false,"level":"WARNING","target":{"type":"Server","id":"server-home"},"data":{"type":"ServerDisk","data":{"name":"Home Server","message":"Disk space is running low"}}},
+    {"_id":"alert-service","ts":1789983363000,"resolved":false,"level":"CRITICAL","target":{"type":"Stack","id":"stack-home"},"data":{"type":"ServiceHealth","data":{"name":"Home Services","message":"Web service health check failed"}}}
+  ],"next_page":null}
+  """
+
+  static let updatesJSON = """
+  {"updates":[
+    {"id":"update-deploy","operation":"DeployStack","start_ts":1789983063000,"success":true,"username":"System","target":{"type":"Stack","id":"stack-home"},"status":"Complete"},
+    {"id":"update-pull","operation":"PullImage","start_ts":1789982763000,"success":true,"username":"System","target":{"type":"Stack","id":"stack-home"},"status":"Complete"}
+  ],"next_page":null}
+  """
 }
 
 private extension String {
@@ -184,6 +198,8 @@ private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable 
       default: ScreenshotDemo.containersJSON
     }
     case "GetStackLog", "GetContainerLog": ScreenshotDemo.logJSON
+    case "ListAlerts": ScreenshotDemo.alertsJSON
+    case "ListUpdates": ScreenshotDemo.updatesJSON
     default: "{\"_id\":\"demo-update\",\"success\":true,\"status\":\"Complete\"}"
     }
   }
@@ -229,6 +245,9 @@ private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable 
 struct ScreenshotDemoRootView: View {
   @StateObject private var liveUpdates = KomodoLiveUpdateController(initialStatus: .live)
   @StateObject private var appSettings = AppSettings()
+  @StateObject private var notificationInbox = NotificationInboxStore(
+    clientFactory: { _, _ in ScreenshotDemo.makeClient() }
+  )
   @State private var selectedTab = ScreenshotDemo.screen.hasPrefix("server-")
     ? "server" : ScreenshotDemo.screen.replacingOccurrences(of: "-list", with: "")
 
@@ -242,6 +261,14 @@ struct ScreenshotDemoRootView: View {
       }
       Tab("title.containers", systemImage: "shippingbox.fill", value: "container") {
         demoNavigation { containerScreen }
+      }
+      Tab("title.notifications", systemImage: "bell.fill", value: "notifications") {
+        demoNavigation {
+          NotificationInboxView(
+            store: notificationInbox, profile: ScreenshotDemo.profile,
+            keychainStore: .shared, appSettings: appSettings
+          )
+        }
       }
       Tab("settings.title", systemImage: "gearshape.fill", value: "settings") {
         NavigationStack { SettingsView(settings: appSettings) }

@@ -1,11 +1,16 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct VaranApp: App {
   @State private var startupState = StartupState.loading
   @State private var startupAttempt = 0
   @StateObject private var appSettings = AppSettings()
+
+  init() {
+    UNUserNotificationCenter.current().delegate = SystemNotificationDelegate.shared
+  }
 
   var body: some Scene {
     WindowGroup {
