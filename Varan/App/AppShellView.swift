@@ -174,9 +174,11 @@ struct AppShellView: View {
         .task(id: "\(selectedProfileID?.uuidString ?? "none")-\(scenePhase)-\(sidebarSelection == .notifications)-\(appSettings.liveUpdatesEnabled)") {
           await connectNotificationLiveUpdates()
         }
-        .onReceive(notificationLiveUpdates.$latestEvent.compactMap { $0 }) { _ in
+        .onReceive(notificationLiveUpdates.$latestEvent.compactMap { $0 }) { event in
           if let selectedProfileID {
-            notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+            notificationInbox.refreshForLiveEvent(
+              profileID: selectedProfileID, operation: event.operation
+            )
           }
         }
         .onReceive(notificationLiveUpdates.$refreshGeneration) { generation in
@@ -553,9 +555,11 @@ private struct MobileAppShellView: View {
         guard let profile = notification.object as? ServerProfile else { return }
         Task { await notificationInbox.connectionDidChange(profile: profile) }
       }
-      .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { _ in
+      .onReceive(liveUpdates.$latestEvent.compactMap { $0 }) { event in
         if let selectedProfileID {
-          notificationInbox.refreshForLiveEvent(profileID: selectedProfileID)
+          notificationInbox.refreshForLiveEvent(
+            profileID: selectedProfileID, operation: event.operation
+          )
         }
       }
       .onReceive(liveUpdates.$refreshGeneration) { generation in

@@ -61,7 +61,7 @@ enum ScreenshotDemo {
   """
 
   static let serverDetailJSON = """
-  {"_id":"server-home","name":"Home Server","description":"Primary home lab host","tags":["production"],"info":{},"config":{"address":"https://192.168.1.10:8120","external_address":"https://komodo.example.com","region":"Home Lab","enabled":true,"insecure_tls":false,"auto_prune":true,"stats_monitoring":true}}
+  {"_id":"server-home","name":"Home Server","description":"Primary home lab host","tags":["production"],"info":{},"config":{"address":"https://192.168.1.10:8120","external_address":"https://komodo.example.com","region":"Home Lab","enabled":true,"insecure_tls":false,"auto_prune":true,"stats_monitoring":true,"auto_rotate_keys":true,"passkey":"","ignore_mounts":["/mnt/backup"],"send_unreachable_alerts":true,"send_cpu_alerts":true,"send_mem_alerts":true,"send_disk_alerts":true,"send_version_mismatch_alerts":true,"cpu_warning":90,"cpu_critical":99,"mem_warning":75,"mem_critical":95,"disk_warning":75,"disk_critical":95,"maintenance_windows":[{"name":"Weekly maintenance","description":"Host updates","schedule_type":"Weekly","day_of_week":"Sunday","date":"","hour":3,"minute":0,"duration_minutes":30,"timezone":"Europe/Berlin","enabled":true}]}}
   """
 
   static var serverDetailResponseJSON: String {
@@ -91,7 +91,7 @@ enum ScreenshotDemo {
   }
 
   static let stackDetailJSON = """
-  {"_id":"stack-home","name":"Home Services","description":"Core services for the home lab","template":false,"tags":["production"],"info":{"missing_files":[],"deployed_project_name":"home-services","deployed_hash":"c124a98","latest_hash":"d833fb2","latest_services":[{"service_name":"web","container_name":"home-web-1","image":"ghcr.io/example/home-web:2.4"},{"service_name":"database","container_name":"home-db-1","image":"postgres:17"}]},"config":{"server_id":"server-home","swarm_id":"","project_name":"home-services","file_paths":["compose.yaml"],"linked_repo":"","repo":"example/home-services","branch":"main","auto_pull":true,"poll_for_updates":true,"auto_update":false}}
+  {"_id":"stack-home","name":"Home Services","description":"Core services for the home lab","template":false,"tags":["production"],"info":{"missing_files":[],"deployed_project_name":"home-services","deployed_hash":"c124a98","latest_hash":"d833fb2","latest_services":[{"service_name":"web","container_name":"home-web-1","image":"ghcr.io/example/home-web:2.4"},{"service_name":"database","container_name":"home-db-1","image":"postgres:17"}]},"config":{"server_id":"server-home","swarm_id":"","project_name":"home-services","file_paths":["compose.yaml"],"linked_repo":"","repo":"example/home-services","branch":"main","auto_pull":true,"poll_for_updates":true,"auto_update":false,"files_on_host":false,"file_contents":"","run_directory":"stacks/home","env_file_path":".env","environment":"LOG_LEVEL=info","git_provider":"github.com","git_https":true,"git_account":"","commit":"","clone_path":"","reclone":false,"additional_env_files":[{"path":"production.env","track":true}],"config_files":[{"path":"web.conf","services":["web"],"requires":"Restart"}],"run_build":false,"destroy_before_deploy":false,"auto_update_all_services":false,"auto_update_skip_services":["database"],"ignore_services":["migration"],"send_alerts":true,"registry_provider":"ghcr.io","registry_account":"","extra_args":[],"build_extra_args":[],"compose_cmd_wrapper":"","compose_cmd_wrapper_include":[],"skip_secret_interp":false,"webhook_enabled":true,"webhook_force_deploy":false,"webhook_secret":"","pre_deploy":{"path":"","command":"","shell_mode":false},"post_deploy":{"path":"","command":"","shell_mode":false}}}
   """
 
   static let containersJSON = """
@@ -206,35 +206,45 @@ private final class ScreenshotDemoURLProtocol: URLProtocol, @unchecked Sendable 
 
   private final class DemoState: @unchecked Sendable {
     private let lock = NSLock()
-    private var serverRegion = "Home Lab"
-    private var stackBranch = "main"
+    private var serverConfigOverrides: [String: Any] = [:]
+    private var stackConfigOverrides: [String: Any] = [:]
 
     var serverJSON: String {
       lock.lock(); defer { lock.unlock() }
-      return ScreenshotDemo.serverDetailResponseJSON.replacingOccurrences(
-        of: "\"region\":\"Home Lab\"", with: "\"region\":\"\(serverRegion)\""
-      )
+      guard var payload = try? JSONSerialization.jsonObject(with: Data(ScreenshotDemo.serverDetailResponseJSON.utf8)) as? [String: Any],
+            var config = payload["config"] as? [String: Any] else { return ScreenshotDemo.serverDetailResponseJSON }
+      config.merge(serverConfigOverrides) { _, saved in saved }
+      payload["config"] = config
+      guard let data = try? JSONSerialization.data(withJSONObject: payload),
+            let json = String(data: data, encoding: .utf8) else { return ScreenshotDemo.serverDetailResponseJSON }
+      return json
     }
 
     var stackJSON: String {
       lock.lock(); defer { lock.unlock() }
-      return ScreenshotDemo.stackDetailJSON.replacingOccurrences(
-        of: "\"branch\":\"main\"", with: "\"branch\":\"\(stackBranch)\""
-      )
+      guard var payload = try? JSONSerialization.jsonObject(with: Data(ScreenshotDemo.stackDetailJSON.utf8)) as? [String: Any],
+            var config = payload["config"] as? [String: Any] else { return ScreenshotDemo.stackDetailJSON }
+      config.merge(stackConfigOverrides) { _, saved in saved }
+      payload["config"] = config
+      guard let data = try? JSONSerialization.data(withJSONObject: payload),
+            let json = String(data: data, encoding: .utf8) else { return ScreenshotDemo.stackDetailJSON }
+      return json
     }
 
     func updateServer(_ body: [String: Any]?) -> String {
       lock.lock()
-      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any],
-         let region = config["region"] as? String { serverRegion = region }
+      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any] {
+        serverConfigOverrides.merge(config) { _, saved in saved }
+      }
       lock.unlock()
       return serverJSON
     }
 
     func updateStack(_ body: [String: Any]?) -> String {
       lock.lock()
-      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any],
-         let branch = config["branch"] as? String { stackBranch = branch }
+      if let config = (body?["params"] as? [String: Any])?["config"] as? [String: Any] {
+        stackConfigOverrides.merge(config) { _, saved in saved }
+      }
       lock.unlock()
       return stackJSON
     }

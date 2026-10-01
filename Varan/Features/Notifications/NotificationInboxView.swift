@@ -12,6 +12,13 @@ enum InboxItem: Identifiable {
     }
   }
 
+  var target: KomodoNoticeTarget {
+    switch self {
+    case .alert(let alert): alert.target
+    case .update(let update): update.target
+    }
+  }
+
   var date: Date {
     let timestamp: Int64
     switch self {
@@ -51,6 +58,8 @@ final class NotificationInboxStore: ObservableObject {
   private var failedUpdateIDs: Set<String> = []
   private var refreshPending = false
   private var liveRefreshTask: Task<Void, Never>?
+  let resourceNames = ResourceNameResolver()
+  private var resourceNamesObservation: AnyCancellable?
 
   init(
     defaults: UserDefaults = .standard,
@@ -60,6 +69,9 @@ final class NotificationInboxStore: ObservableObject {
     self.defaults = defaults
     candidateTracker = NotificationCandidateTracker(defaults: defaults)
     self.clientFactory = clientFactory
+    resourceNamesObservation = resourceNames.objectWillChange.sink { [weak self] _ in
+      self?.objectWillChange.send()
+    }
   }
 
   func monitor(
@@ -125,6 +137,7 @@ final class NotificationInboxStore: ObservableObject {
       refreshPending = false
       liveRefreshTask?.cancel()
       liveRefreshTask = nil
+      resourceNames.reset()
       readIDs = Set(defaults.stringArray(forKey: readKey(profile.id)) ?? [])
       updateUnreadCount()
     }
@@ -218,8 +231,11 @@ final class NotificationInboxStore: ObservableObject {
     )
   }
 
-  func refreshForLiveEvent(profileID: UUID) {
+  func refreshForLiveEvent(profileID: UUID, operation: String? = nil) {
     guard self.profileID == profileID else { return }
+    if let operation, operation.hasPrefix("Rename") || operation.hasPrefix("Delete") {
+      resourceNames.invalidate()
+    }
     liveRefreshTask?.cancel()
     liveRefreshTask = Task {
       try? await Task.sleep(for: .milliseconds(500))
@@ -327,6 +343,16 @@ final class NotificationInboxStore: ObservableObject {
     }
   }
 
+  func resourceName(for target: KomodoNoticeTarget) async -> String? {
+    guard let client else { return nil }
+    return await resourceNames.name(for: target, client: client)
+  }
+
+  func prefetchResourceNames(for targets: [KomodoNoticeTarget]) async {
+    guard let client else { return }
+    await resourceNames.prefetch(targets, client: client)
+  }
+
   func alertDetail(id: String) async throws -> KomodoAlert {
     guard let client else { throw KomodoAPIError.connectionFailed }
     return try await client.getAlert(id: id)
@@ -415,9 +441,11 @@ final class NotificationInboxStore: ObservableObject {
          notificationSettings?.failedUpdateNotificationsEnabled == true,
          let profileName = currentProfile?.name {
         for update in failedUpdates where newIDs.contains(update.id) {
+          let resource = await resourceNames.name(for: update.target, client: client)
           await SystemNotificationService.shared.deliver(
             title: String(localized: "notifications.system.failedTitle"),
-            body: "\(profileName): \(localizedOperation(update.operation))",
+            body: "\(profileName): \(localizedOperation(update.operation))"
+              + (resource.map { " · \($0)" } ?? ""),
             destination: NotificationDestination(
               profileID: profileID, kind: .update, itemID: update.id
             )
@@ -625,7 +653,10 @@ struct NotificationInboxView: View {
             keychainStore: keychainStore, appSettings: appSettings
           )
         } label: {
-          InboxRow(item: item, isUnread: !store.isRead(item))
+          InboxRow(
+            item: item, isUnread: !store.isRead(item),
+            resolution: store.resourceNames.resolution(for: item.target)
+          )
         }
       }
 
@@ -649,7 +680,16 @@ struct NotificationInboxView: View {
         .disabled(store.isLoading)
       }
     }
-    .refreshable { await store.refresh() }
+    .refreshable {
+      store.resourceNames.invalidate()
+      await store.refresh()
+    }
+    .task(id: "\(store.resourceNames.generation)|\(Set(items.map { "\($0.target.type):\($0.target.id)" }).sorted())") {
+      await store.prefetchResourceNames(for: items.compactMap { item in
+        if case .alert(let alert) = item, alert.data.data?.name != nil { return nil }
+        return item.target
+      })
+    }
     .navigationDestination(item: $linkedDestination) { destination in
       NotificationLinkedItemView(
         destination: destination, store: store, profile: profile,
@@ -730,6 +770,7 @@ private struct NotificationLinkedItemView: View {
 private struct InboxRow: View {
   let item: InboxItem
   let isUnread: Bool
+  let resolution: ResourceNameResolver.Resolution?
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
@@ -745,7 +786,7 @@ private struct InboxRow: View {
         switch item {
         case .alert(let alert):
           HStack(spacing: 7) {
-            Text(alert.data.data?.name ?? alert.target.type)
+            Text(alert.data.data?.name ?? resourceDescription(alert.target, resolution: resolution))
               .font(.subheadline)
               .foregroundStyle(.secondary)
               .lineLimit(1)
@@ -781,7 +822,7 @@ private struct InboxRow: View {
   }
 
   private func updateSubtitle(_ update: KomodoUpdateListItem) -> String {
-    "\(update.target.type) · \(localizedUpdateStatus(update.status, success: update.success))"
+    "\(resourceDescription(update.target, resolution: resolution)) · \(localizedUpdateStatus(update.status, success: update.success))"
   }
 
   private var symbol: String {
@@ -868,11 +909,27 @@ private struct NotificationDetailView: View {
       } catch {
         errorMessage = error.localizedDescription
       }
+      switch item {
+      case .alert(let value) where value.data.data?.name == nil:
+        _ = await store.resourceName(for: value.target)
+      case .update(let value):
+        _ = await store.resourceName(for: value.target)
+      default:
+        break
+      }
     }
   }
 
   @ViewBuilder
   private func resourceField(_ target: KomodoNoticeTarget, name: String? = nil) -> some View {
+    let resolution = store.resourceNames.resolution(for: target)
+    let isLoading = name == nil && resolution == nil && ResourceNameResolver.supports(target)
+    let label = LabeledContent("notifications.resource") {
+      HStack(spacing: 6) {
+        Text(resourceDescription(target, name: name, resolution: resolution))
+        if isLoading { ProgressView().controlSize(.small) }
+      }
+    }
     if !target.id.isEmpty && (target.type == "Server" || target.type == "Stack") {
       NavigationLink {
         NotificationResourceDestinationView(
@@ -880,10 +937,10 @@ private struct NotificationDetailView: View {
           keychainStore: keychainStore, appSettings: appSettings
         )
       } label: {
-        LabeledContent("notifications.resource", value: resourceDescription(target, name: name))
+        label
       }
     } else {
-      LabeledContent("notifications.resource", value: resourceDescription(target, name: name))
+      label
     }
   }
 }
@@ -1038,12 +1095,20 @@ private func localizedStage(_ stage: String) -> String {
   }
 }
 
-private func resourceDescription(_ target: KomodoNoticeTarget, name: String? = nil) -> String {
-  let label = name ?? target.id
-  if label.isEmpty || label.caseInsensitiveCompare(target.type) == .orderedSame {
-    return target.type.readableIdentifier
+private func resourceDescription(
+  _ target: KomodoNoticeTarget, name: String? = nil,
+  resolution: ResourceNameResolver.Resolution? = nil
+) -> String {
+  let type = target.type.readableIdentifier
+  let shortID = "\(target.id.prefix(8))…"
+  if let name, !name.isEmpty { return "\(type) · \(name)" }
+  switch resolution {
+  case .name(let resolved): return "\(type) · \(resolved)"
+  case .missing:
+    return "\(type) · \(String(localized: "notifications.resource.deleted")) (\(shortID))"
+  case .unavailable: return target.id.isEmpty ? type : "\(type) · \(shortID)"
+  case nil: return type
   }
-  return "\(target.type.readableIdentifier) · \(label)"
 }
 
 private extension String {

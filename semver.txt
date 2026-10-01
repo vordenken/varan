@@ -1,5 +1,31 @@
-0.6.0
+0.7.0
 ---
+### Development Preview
+- Moved read-only Server configuration details to a separate page opened from
+  the Server overview, so the detail view no longer shifts while loading
+- Resolved Stack target Server names in configuration details and displayed
+  concrete deployed/current Git revisions and changed project names in comparisons
+- Added persistent labels and English and German explanations to filled Stack
+  and Server editor fields while keeping read-only configuration details compact
+- Added Server alert switches and validated CPU, memory, and disk thresholds
+  with change review, decimal comma support, and typed partial writes
+- Added Stack deployment comparison for project names, cached Git revisions, and
+  remote file snapshots, distinguishing deploy and restart requirements from
+  unavailable or incomplete comparison data
+- Added Stack Compose source editing for Komodo, host files, and Git, with file
+  paths, environment settings, source-change review, and typed partial writes
+- Added grouped, read-only Stack and Server configuration details with Compose
+  source, file paths, Git, deployment, monitoring, alert thresholds, and maintenance
+  windows; sensitive contents remain hidden and omitted API fields stay distinct
+- Replaced free-form Stack target Server IDs with a paginated server selection,
+  preserving existing references when servers are unavailable
+- Stopped live update reconnect loops after rejected logins, warned before
+  source changes erase Compose contents stored in Komodo, and restricted
+  HTTP to real private IP addresses instead of matching hostname prefixes
+- Reused one network session for API and live update connections and ignored
+  stale Stack detail and log reloads that finish out of order
+
+## 0.6.0
 ### Development Preview
 - Added a notifications tab for Komodo alerts and action updates with details,
   local unread state, pagination, and foreground refresh

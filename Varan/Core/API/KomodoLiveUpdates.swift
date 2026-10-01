@@ -58,7 +58,7 @@ private actor URLSessionLiveWebSocketConnection: LiveWebSocketConnection {
   private let task: URLSessionWebSocketTask
 
   init(url: URL) {
-    task = URLSession.shared.webSocketTask(with: url)
+    task = KomodoAPIClient.sharedSession.webSocketTask(with: url)
     task.resume()
   }
 
@@ -86,11 +86,13 @@ enum KomodoLiveUpdateError: Error, Equatable {
   case invalidWebSocketURL
   case unsupportedMessage
   case connectionClosedBeforeLogin
+  case loginRejected
 }
 
 @MainActor
 final class KomodoLiveUpdateController: ObservableObject {
   @Published private(set) var status = LiveConnectionStatus.offline
+  @Published private(set) var loginRejected = false
   @Published private(set) var lastEventReceivedAt: Date?
   @Published private(set) var latestEvent: KomodoUpdateEvent?
   @Published private(set) var refreshGeneration = 0
@@ -126,6 +128,7 @@ final class KomodoLiveUpdateController: ObservableObject {
     stop()
     let contextID = UUID()
     self.contextID = contextID
+    loginRejected = false
     status = .connecting
     connectionTask = Task { [weak self] in
       await self?.run(address: address, authentication: authentication, contextID: contextID)
@@ -216,6 +219,15 @@ final class KomodoLiveUpdateController: ObservableObject {
         }
       } catch is CancellationError {
         break
+      } catch KomodoLiveUpdateError.loginRejected {
+        guard self.contextID == contextID else { break }
+        if let connection = self.connection {
+          await connection.close()
+          self.connection = nil
+        }
+        // Retrying with the same rejected credentials cannot succeed; wait for a manual reconnect.
+        loginRejected = true
+        break
       } catch {
         guard !Task.isCancelled, self.contextID == contextID else { break }
         if let connection = self.connection {
@@ -248,14 +260,17 @@ final class KomodoLiveUpdateController: ObservableObject {
     from connection: any LiveWebSocketConnection,
     contextID: UUID
   ) async throws {
+    var isLoggedIn = false
     while !Task.isCancelled, self.contextID == contextID {
       let data = try await connection.receive()
       if String(data: data, encoding: .utf8) == "LOGGED_IN" {
+        isLoggedIn = true
         status = .live
         lastEventReceivedAt = Date()
         refreshGeneration += 1
         continue
       }
+      guard isLoggedIn else { throw KomodoLiveUpdateError.loginRejected }
       guard let event = try? decoder.decode(KomodoUpdateEvent.self, from: data) else {
         continue
       }

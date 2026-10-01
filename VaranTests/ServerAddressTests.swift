@@ -20,6 +20,19 @@ final class ServerAddressTests: XCTestCase {
     }
   }
 
+  func testRejectsHTTPForHostnameWithPrivateIPPrefix() {
+    for input in ["http://10.example.com", "http://192.168.evil.com", "http://172.16.example.com"] {
+      XCTAssertThrowsError(try ServerAddress(input), input) { error in
+        XCTAssertEqual(error as? ServerAddressError, .insecureRemoteHost)
+      }
+    }
+  }
+
+  func testAllowsHTTPForPrivate172Network() throws {
+    XCTAssertNoThrow(try ServerAddress("http://172.20.0.5:9120"))
+    XCTAssertThrowsError(try ServerAddress("http://172.32.0.5:9120"))
+  }
+
   func testRejectsCredentialsInURL() {
     XCTAssertThrowsError(try ServerAddress("https://user:secret@komodo.example.com")) { error in
       XCTAssertEqual(error as? ServerAddressError, .invalid)

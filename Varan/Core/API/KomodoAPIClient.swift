@@ -201,6 +201,15 @@ actor KomodoAPIClient {
   private struct CreateStackParameters: Encodable { let name: String; let config: StackConfigPatch }
   private struct UpdateStackParameters: Encodable { let id: String; let config: StackConfigPatch }
 
+  // Clients are created per request; one session keeps connections reusable and avoids leaking sessions.
+  static let sharedSession: URLSession = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.httpShouldSetCookies = false
+    configuration.httpCookieStorage = nil
+    configuration.urlCache = nil
+    return URLSession(configuration: configuration)
+  }()
+
   private let address: ServerAddress
   private let authentication: KomodoAuthentication?
   private let session: URLSession
@@ -210,7 +219,7 @@ actor KomodoAPIClient {
   init(
     address: ServerAddress,
     authentication: KomodoAuthentication,
-    session: URLSession = .shared
+    session: URLSession = KomodoAPIClient.sharedSession
   ) {
     self.address = address
     self.authentication = authentication
@@ -236,6 +245,13 @@ actor KomodoAPIClient {
 
   func getStack(idOrName: String) async throws -> StackDetail {
     try await read(type: "GetStack", parameters: StackParameters(stack: idOrName))
+  }
+
+  func getStackComposeConfiguration(idOrName: String) async throws -> StackComposeConfiguration {
+    let response: StackComposeConfigurationResponse = try await read(
+      type: "GetStack", parameters: StackParameters(stack: idOrName)
+    )
+    return response.config
   }
 
   func listServers(page: Int = 0, limit: Int = 50) async throws -> [ServerListItem] {
@@ -543,6 +559,51 @@ actor KomodoAPIClient {
     try await read(type: "GetUpdate", parameters: NoticeIDParameters(id: id))
   }
 
+  static let nameableResourceTypes: [String: String] = [
+    "Server": "server", "Stack": "stack", "Deployment": "deployment", "Build": "build",
+    "Repo": "repo", "Procedure": "procedure", "Action": "action", "Builder": "builder",
+    "Alerter": "alerter", "ResourceSync": "sync", "Swarm": "swarm",
+  ]
+
+  func resourceName(type: String, id: String) async throws -> String? {
+    guard let key = Self.nameableResourceTypes[type] else { return nil }
+    let response: NamedResource = try await read(type: "Get\(type)", parameters: [key: id])
+    return response.name
+  }
+
+  /// Maps resource IDs to names; may be incomplete if the server limits list sizes.
+  func listResourceNames(type: String) async throws -> [String: String] {
+    switch type {
+    case "Server":
+      return Dictionary(try await listAllServers().map { ($0.id, $0.name) }) { first, _ in first }
+    case "Stack":
+      let pageSize = 50
+      var names: [String: String] = [:]
+      var page = 0
+      while true {
+        try Task.checkCancellation()
+        let batch = try await listStacks(page: page, limit: pageSize)
+        let previousCount = names.count
+        for stack in batch { names[stack.id] = stack.name }
+        if batch.count < pageSize || names.count == previousCount { return names }
+        page += 1
+      }
+    default:
+      guard Self.nameableResourceTypes[type] != nil else { return [:] }
+      let items: [NamedResource] = try await read(
+        type: "List\(type)s", parameters: ResourceListParameters()
+      )
+      return Dictionary(items.compactMap { item in item.id.map { ($0, item.name) } }) { first, _ in first }
+    }
+  }
+
+  private struct NamedResource: Decodable {
+    let id: String?
+    let name: String
+  }
+  private struct ResourceListParameters: Encodable { let query = EmptyQuery() }
+  private struct EmptyQuery: Encodable {}
+
   private func read<Response: Decodable, Parameters: Encodable>(
     type: String,
     parameters: Parameters
@@ -570,6 +631,7 @@ actor KomodoAPIClient {
     parameters: Parameters
   ) async throws -> Response {
     var request = URLRequest(url: address.url.appendingPathComponent(endpoint.rawValue))
+    request.cachePolicy = .reloadIgnoringLocalCacheData
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "content-type")
     applyAuthentication(to: &request)
