@@ -21,40 +21,33 @@ brand assets, or source code.
 
 ## Features
 
-- **Native on Apple platforms:** one SwiftUI app designed for iPhone, iPad, and
-  Mac, with navigation and controls that adapt to each platform.
-- **Multiple Komodo instances:** add, switch between, and centrally manage
-  multiple environments. Read their current state and apply supported
-  configuration changes directly from Varan.
-- **Servers, stacks, and containers:** browse related resources, inspect their
-  state, and move naturally from an environment overview into the details.
-- **Live updates:** receive authenticated Komodo events over WebSocket, refresh
-  affected views automatically, and reconnect after interruptions.
-- **Metrics and history:** monitor current resource usage and explore historical
-  server data across multiple time ranges.
-- **Logs and workload controls:** search and follow stack or container logs,
-  then deploy, update, pause, restart, stop, or remove supported workloads from
-  state-aware native menus with clear confirmation.
-- **Safe configuration editing:** create and edit supported server and stack
-  settings using typed, partial updates while preserving Komodo's API semantics.
-- **Secure connections:** authenticate with an API key or JWT. Credentials stay
-  in the system Keychain, and remote connections require HTTPS.
-- **Guided setup and centralized settings:** connect the first instance through
-  onboarding, then manage connections, live updates, polling, and app behavior
-  from one settings screen.
-- **English and German:** follow the system language across all supported
-  platforms.
+- **Manage resources:** browse servers, stacks, and containers; inspect their
+  state; and edit supported server and stack settings with safe partial updates.
+- **Operate workloads:** deploy, update, pause, restart, stop, or remove supported
+  workloads. Search and follow stack or container logs.
+- **Monitor activity:** track current metrics and server history, with live
+  updates over Komodo's authenticated event stream.
+- **Stay informed:** review alerts and action updates in the notifications
+  inbox, filter by status or severity, and jump to supported resources. Optional
+  system notifications announce critical alerts and failed actions.
+- **Connect securely:** manage multiple Komodo instances from one settings
+  screen. Authenticate with an API key or JWT; credentials stay in the system
+  Keychain, and remote connections require HTTPS.
+- **Use it everywhere:** a native SwiftUI experience adapts to iPhone, iPad, and
+  Mac, with guided setup, configurable refresh behavior, and English and German
+  localization.
 
 ## Native on iPhone, iPad, and Mac
 
 <p align="center">
-  <img src="Docs/Screenshots/ios-server-detail.png" alt="Server details with live connection state, refresh, and management actions in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Stack services and metrics with state-aware toolbar actions in Varan" width="30%">
-  <img src="Docs/Screenshots/ios-container-detail.png" alt="Container metrics with live connection state and runtime actions in Varan" width="30%">
+  <img src="Docs/Screenshots/ios-server-detail.png" alt="Server details with current metrics and management actions in Varan" width="22%">
+  <img src="Docs/Screenshots/ios-stack-detail.png" alt="Stack services with state-aware toolbar actions in Varan" width="22%">
+  <img src="Docs/Screenshots/ios-container-detail.png" alt="Container metrics and runtime actions in Varan" width="22%">
+  <img src="Docs/Screenshots/ios-notifications.png" alt="Notifications inbox with Komodo alerts and action updates in Varan" width="22%">
 </p>
 
 <p align="center">
-  <sub><strong>Server details</strong> · <strong>Stack services and metrics</strong> · <strong>Container details</strong></sub>
+  <sub><strong>Server</strong> · <strong>Stack</strong> · <strong>Container</strong> · <strong>Notifications</strong></sub>
 </p>
 
 <p align="center"><sub>Captured from the real iOS app in Simulator with deterministic demo data.</sub></p>
@@ -65,7 +58,8 @@ single predictable place on every platform. Resource details keep connection
 state and refresh controls in the toolbar. Stack and container operations live
 in a native, state-aware Actions menu, leaving the content and tab bar
 unobscured. Stack-wide, service, and container logs open in the same dedicated,
-searchable viewer.
+searchable viewer. The notifications inbox brings Komodo alerts and action
+updates together in a separate tab.
 
 ## Connection and update behavior
 

@@ -873,6 +873,174 @@ struct KomodoUpdate: Decodable, Equatable, Sendable {
   }
 }
 
+struct KomodoNoticeTarget: Decodable, Equatable, Sendable {
+  let type: String
+  let id: String
+}
+
+struct KomodoAlertPayload: Decodable, Equatable, Sendable {
+  struct Detail: Decodable, Equatable, Sendable {
+    let name: String?
+    let message: String?
+    let details: String?
+    let service: String?
+    let image: String?
+
+    private enum CodingKeys: String, CodingKey {
+      case name, message, details, service, image
+    }
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      name = try? container.decode(String.self, forKey: .name)
+      message = try? container.decode(String.self, forKey: .message)
+      details = try? container.decode(String.self, forKey: .details)
+      service = try? container.decode(String.self, forKey: .service)
+      image = try? container.decode(String.self, forKey: .image)
+    }
+  }
+
+  let type: String
+  let data: Detail?
+
+  private enum CodingKeys: String, CodingKey {
+    case type, data
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    type = try container.decode(String.self, forKey: .type)
+    data = try? container.decode(Detail.self, forKey: .data)
+  }
+}
+
+struct KomodoAlert: Decodable, Equatable, Identifiable, Sendable {
+  let id: String
+  let timestamp: Int64
+  let resolved: Bool
+  let level: String
+  let target: KomodoNoticeTarget
+  let data: KomodoAlertPayload
+  let resolvedTimestamp: Int64?
+
+  enum CodingKeys: String, CodingKey {
+    case id = "_id"
+    case timestamp = "ts"
+    case resolved, level, target, data
+    case resolvedTimestamp = "resolved_ts"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(KomodoResourceID.self, forKey: .id).value
+    timestamp = try container.decode(Int64.self, forKey: .timestamp)
+    resolved = try container.decode(Bool.self, forKey: .resolved)
+    level = try container.decode(String.self, forKey: .level)
+    target = try container.decode(KomodoNoticeTarget.self, forKey: .target)
+    data = try container.decode(KomodoAlertPayload.self, forKey: .data)
+    resolvedTimestamp = try container.decodeIfPresent(Int64.self, forKey: .resolvedTimestamp)
+  }
+}
+
+struct KomodoAlertPage: Decodable, Equatable, Sendable {
+  let alerts: [KomodoAlert]
+  let nextPage: Int?
+
+  enum CodingKeys: String, CodingKey {
+    case alerts
+    case nextPage = "next_page"
+  }
+}
+
+struct KomodoUpdateListItem: Decodable, Equatable, Identifiable, Sendable {
+  let id: String
+  let operation: String
+  let startTimestamp: Int64
+  let success: Bool
+  let username: String?
+  let target: KomodoNoticeTarget
+  let status: String
+
+  enum CodingKeys: String, CodingKey {
+    case id, operation, success, username, target, status
+    case startTimestamp = "start_ts"
+  }
+
+  var actorDisplayName: String? {
+    guard let username, !username.isEmpty else { return nil }
+    switch username {
+    case "000000000000000000000000", "System":
+      return String(localized: "notifications.actor.system")
+    case "000000000000000000000001", "Procedure":
+      return String(localized: "notifications.actor.procedure")
+    case "000000000000000000000002", "Action":
+      return String(localized: "notifications.actor.action")
+    case "000000000000000000000003", "Git Webhook":
+      return String(localized: "notifications.actor.gitWebhook")
+    case "000000000000000000000004", "Auto Redeploy":
+      return String(localized: "notifications.actor.autoRedeploy")
+    case "000000000000000000000005", "Resource Sync":
+      return String(localized: "notifications.actor.resourceSync")
+    case "000000000000000000000006", "Stack Wizard":
+      return String(localized: "notifications.actor.stackWizard")
+    case "000000000000000000000007", "Build Manager":
+      return String(localized: "notifications.actor.buildManager")
+    case "000000000000000000000008", "Repo Manager":
+      return String(localized: "notifications.actor.repoManager")
+    case "unknown":
+      return String(localized: "notifications.actor.unknown")
+    default:
+      return username.range(of: "^[0-9a-fA-F]{24}$", options: .regularExpression) != nil
+        ? String(localized: "notifications.actor.unknown") : username
+    }
+  }
+}
+
+struct KomodoUpdatePage: Decodable, Equatable, Sendable {
+  let updates: [KomodoUpdateListItem]
+  let nextPage: Int?
+
+  enum CodingKeys: String, CodingKey {
+    case updates
+    case nextPage = "next_page"
+  }
+}
+
+struct KomodoUpdateDetail: Decodable, Equatable, Sendable {
+  struct Stage: Decodable, Equatable, Sendable {
+    let stage: String
+    let success: Bool
+  }
+
+  let id: String
+  let operation: String
+  let startTimestamp: Int64
+  let endTimestamp: Int64?
+  let success: Bool
+  let status: String
+  let target: KomodoNoticeTarget
+  let logs: [Stage]
+
+  enum CodingKeys: String, CodingKey {
+    case id = "_id"
+    case operation, success, status, target, logs
+    case startTimestamp = "start_ts"
+    case endTimestamp = "end_ts"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(KomodoResourceID.self, forKey: .id).value
+    operation = try container.decode(String.self, forKey: .operation)
+    startTimestamp = try container.decode(Int64.self, forKey: .startTimestamp)
+    endTimestamp = try container.decodeIfPresent(Int64.self, forKey: .endTimestamp)
+    success = try container.decode(Bool.self, forKey: .success)
+    status = try container.decode(String.self, forKey: .status)
+    target = try container.decode(KomodoNoticeTarget.self, forKey: .target)
+    logs = try container.decodeIfPresent([Stage].self, forKey: .logs) ?? []
+  }
+}
+
 struct StackListItem: Decodable, Equatable, Identifiable, Sendable {
   let id: String
   let name: String

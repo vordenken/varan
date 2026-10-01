@@ -1,6 +1,10 @@
 import SwiftData
 import SwiftUI
 
+extension Notification.Name {
+  static let varanConnectionSaved = Notification.Name("varan.connectionSaved")
+}
+
 struct ConnectionEditorView: View {
   private enum AuthenticationMode: CaseIterable, Identifiable {
     case apiKey
@@ -307,6 +311,7 @@ struct ConnectionEditorView: View {
       let profile = try await saveProfile(address: address, credentials: credentials)
       connectionState = .connected
       onSaved(profile)
+      NotificationCenter.default.post(name: .varanConnectionSaved, object: profile)
     } catch {
       connectionState = .failed(
         (error as? LocalizedError)?.errorDescription ?? String(localized: "error.connection.failed")

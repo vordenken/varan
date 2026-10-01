@@ -37,6 +37,8 @@
 		A1000000000000000000001C /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* XCTest.framework */; };
 		A1000000000000000000001D /* EditorSaveGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* EditorSaveGateTests.swift */; };
 		A1000000000000000000001E /* ResourceOverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* ResourceOverviewTests.swift */; };
+		A1000000000000000000001F /* NotificationInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* NotificationInboxView.swift */; };
+		A10000000000000000000020 /* SystemNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* SystemNotifications.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +95,8 @@
 		B10000000000000000000023 /* VaranUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VaranUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000024 /* EditorSaveGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSaveGateTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000025 /* ResourceOverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceOverviewTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000026 /* NotificationInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationInboxView.swift; sourceTree = "<group>"; };
+		B10000000000000000000027 /* SystemNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNotifications.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +187,7 @@
 				D1000000000000000000000E /* Connections */,
 				D1000000000000000000000F /* Stacks */,
 				D10000000000000000000010 /* Resources */,
+				D10000000000000000000014 /* Notifications */,
 				D10000000000000000000012 /* Settings */,
 			);
 			path = Features;
@@ -289,6 +294,15 @@
 				B1000000000000000000001B /* ResourceViews.swift */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000014 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000026 /* NotificationInboxView.swift */,
+				B10000000000000000000027 /* SystemNotifications.swift */,
+			);
+			path = Notifications;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -449,6 +463,8 @@
 				A10000000000000000000015 /* KomodoLiveUpdates.swift in Sources */,
 				A10000000000000000000017 /* AppSettings.swift in Sources */,
 				A10000000000000000000018 /* SettingsView.swift in Sources */,
+				A1000000000000000000001F /* NotificationInboxView.swift in Sources */,
+				A10000000000000000000020 /* SystemNotifications.swift in Sources */,
 				A1000000000000000000001A /* ScreenshotDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -546,7 +562,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.5.0;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -575,7 +591,7 @@
 				INFOPLIST_FILE = Varan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.5.0;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.example.Varan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

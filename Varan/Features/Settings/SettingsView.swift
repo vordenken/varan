@@ -13,6 +13,7 @@ struct SettingsView: View {
   @State private var editingProfile: ServerProfile?
   @State private var profileToDelete: ServerProfile?
   @State private var errorMessage: String?
+  @State private var notificationPermissionDenied = false
 
   init(
     settings: AppSettings,
@@ -108,6 +109,23 @@ struct SettingsView: View {
           .foregroundStyle(.secondary)
       }
 
+      Section("settings.section.notifications") {
+        Toggle("settings.systemNotificationsEnabled", isOn: systemNotificationsBinding)
+        Toggle(
+          "settings.criticalAlertNotificationsEnabled",
+          isOn: $settings.criticalAlertNotificationsEnabled
+        )
+        .disabled(!settings.systemNotificationsEnabled)
+        Toggle(
+          "settings.failedUpdateNotificationsEnabled",
+          isOn: $settings.failedUpdateNotificationsEnabled
+        )
+        .disabled(!settings.systemNotificationsEnabled)
+        Text("settings.systemNotifications.description")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
       Section("settings.section.metrics") {
         Toggle("metrics.autoRefresh", isOn: $settings.metricsAutoRefresh)
         Picker("metrics.refreshInterval", selection: $settings.metricsRefreshInterval) {
@@ -199,6 +217,28 @@ struct SettingsView: View {
     } message: {
       Text(errorMessage ?? String(localized: "error.unknown"))
     }
+    .alert("settings.systemNotifications.permissionDenied", isPresented: $notificationPermissionDenied) {
+      Button("action.ok") {}
+    }
+  }
+
+  private var systemNotificationsBinding: Binding<Bool> {
+    Binding(
+      get: { settings.systemNotificationsEnabled },
+      set: { enabled in
+        guard enabled else {
+          settings.systemNotificationsEnabled = false
+          return
+        }
+        Task {
+          if await SystemNotificationService.shared.requestPermission() {
+            settings.systemNotificationsEnabled = true
+          } else {
+            notificationPermissionDenied = true
+          }
+        }
+      }
+    )
   }
 
   private var confirmsConnectionDeletion: Binding<Bool> {

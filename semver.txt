@@ -1,5 +1,16 @@
-0.5.0
+0.6.0
 ---
+### Development Preview
+- Added a notifications tab for Komodo alerts and action updates with details,
+  local unread state, pagination, and foreground refresh
+- Refreshed notifications after live updates and counted unread alerts and failed
+  actions across all matching pages
+- Added status and severity filters, mark-all-read, and links from notifications
+  to supported server and stack details
+- Added opt-in system notifications for newly detected critical alerts and
+  failed actions, with category preferences and direct links to their details
+
+## 0.5.0
 ### Development Preview
 - Preserved server edit values from available API data and prevented incomplete responses from appearing as empty settings
 - Displayed the detected public IP separately from the optional external address setting

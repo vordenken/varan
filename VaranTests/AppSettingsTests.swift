@@ -15,6 +15,9 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertEqual(settings.logRefreshInterval, .fiveSeconds)
     XCTAssertTrue(settings.logsFollowLatest)
     XCTAssertEqual(settings.defaultResourceSection, .stacks)
+    XCTAssertFalse(settings.systemNotificationsEnabled)
+    XCTAssertTrue(settings.criticalAlertNotificationsEnabled)
+    XCTAssertTrue(settings.failedUpdateNotificationsEnabled)
   }
 
   @MainActor
@@ -28,6 +31,9 @@ final class AppSettingsTests: XCTestCase {
     settings.logRefreshInterval = .manual
     settings.logsFollowLatest = false
     settings.defaultResourceSection = .containers
+    settings.systemNotificationsEnabled = true
+    settings.criticalAlertNotificationsEnabled = false
+    settings.failedUpdateNotificationsEnabled = false
 
     let restored = AppSettings(defaults: defaults)
 
@@ -37,6 +43,9 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertEqual(restored.logRefreshInterval, .manual)
     XCTAssertFalse(restored.logsFollowLatest)
     XCTAssertEqual(restored.defaultResourceSection, .containers)
+    XCTAssertTrue(restored.systemNotificationsEnabled)
+    XCTAssertFalse(restored.criticalAlertNotificationsEnabled)
+    XCTAssertFalse(restored.failedUpdateNotificationsEnabled)
   }
 
   @MainActor
@@ -83,6 +92,9 @@ final class AppSettingsTests: XCTestCase {
     settings.logRefreshInterval = .manual
     settings.logsFollowLatest = false
     settings.defaultResourceSection = .servers
+    settings.systemNotificationsEnabled = true
+    settings.criticalAlertNotificationsEnabled = false
+    settings.failedUpdateNotificationsEnabled = false
     defaults.set("preserved", forKey: "unrelated")
 
     settings.reset()
@@ -92,7 +104,42 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertEqual(settings.logRefreshInterval, .fiveSeconds)
     XCTAssertTrue(settings.logsFollowLatest)
     XCTAssertEqual(settings.defaultResourceSection, .stacks)
+    XCTAssertFalse(settings.systemNotificationsEnabled)
+    XCTAssertTrue(settings.criticalAlertNotificationsEnabled)
+    XCTAssertTrue(settings.failedUpdateNotificationsEnabled)
     XCTAssertEqual(defaults.string(forKey: "unrelated"), "preserved")
+  }
+
+  func testSystemNotificationCandidatesNeedBaselineAndArePerProfile() {
+    let (defaults, suiteName) = makeDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let tracker = NotificationCandidateTracker(defaults: defaults)
+    let first = UUID()
+    let second = UUID()
+
+    XCTAssertTrue(tracker.newIDs(
+      profileID: first, kind: .alert, currentIDs: ["old"]
+    ).isEmpty)
+    XCTAssertEqual(tracker.newIDs(
+      profileID: first, kind: .alert, currentIDs: ["old", "new"]
+    ), ["new"])
+    XCTAssertTrue(tracker.newIDs(
+      profileID: first, kind: .alert, currentIDs: ["old", "new"]
+    ).isEmpty)
+    XCTAssertTrue(tracker.newIDs(
+      profileID: first, kind: .update, currentIDs: ["new"]
+    ).isEmpty)
+    XCTAssertTrue(tracker.newIDs(
+      profileID: second, kind: .alert, currentIDs: ["new"]
+    ).isEmpty)
+  }
+
+  func testSystemNotificationDestinationRoundTripsThroughUserInfo() {
+    let original = NotificationDestination(
+      profileID: UUID(), kind: .update, itemID: "update-1"
+    )
+    XCTAssertEqual(NotificationDestination(userInfo: original.userInfo), original)
+    XCTAssertNil(NotificationDestination(userInfo: ["kind": "alert", "itemID": "a"]))
   }
 
   private func makeDefaults() -> (defaults: UserDefaults, suiteName: String) {

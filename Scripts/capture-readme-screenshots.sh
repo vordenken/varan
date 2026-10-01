@@ -3,7 +3,7 @@
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-device_name=${VARAN_SCREENSHOT_DEVICE:-iPhone 17}
+device_name=${VARAN_SCREENSHOT_DEVICE:-iPhone 18 Pro}
 device_id=$(
   xcrun simctl list devices available |
     awk -v name="$device_name" 'index($0, "    " name " (") == 1 { print; exit }' |
@@ -49,7 +49,7 @@ capture() {
     --screenshot-screen "$screen" \
     -AppleLanguages '(en)' \
     -AppleLocale en_US
-  sleep 3
+  sleep 10
   xcrun simctl io "$device_id" screenshot "$temporary_image"
   cp "$temporary_image" "$screenshots/$destination"
 }
@@ -57,5 +57,6 @@ capture() {
 capture server ios-server-detail.png
 capture stack ios-stack-detail.png
 capture container ios-container-detail.png
+capture notifications ios-notifications.png
 
 echo "Captured real simulator screenshots in $screenshots"

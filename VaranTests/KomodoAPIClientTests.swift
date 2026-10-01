@@ -1146,6 +1146,249 @@ final class KomodoAPIClientTests: XCTestCase {
     XCTAssertEqual(stats.processCount, 0)
   }
 
+  func testNotificationAlertsUseReadAPIAndDecodeUnknownType() async throws {
+    MockURLProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/read")
+      let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      let type = try XCTUnwrap(envelope["type"] as? String)
+      let params = try XCTUnwrap(envelope["params"] as? [String: Any])
+      switch type {
+      case "ListAlerts":
+        XCTAssertEqual(params["page"] as? Int, 2)
+        return Self.response(for: request, statusCode: 200, body: """
+          {"alerts":[{"_id":{"$oid":"67d000000000000000000005"},"ts":1700000000000,"resolved":false,"level":"CRITICAL","target":{"type":"Server","id":"server-1"},"data":{"type":"FutureAlert","data":{"name":"Host A"}},"resolved_ts":null}],"next_page":3}
+          """)
+      case "GetAlert":
+        XCTAssertEqual(params["id"] as? String, "67d000000000000000000005")
+        return Self.response(for: request, statusCode: 200, body: """
+          {"_id":{"$oid":"67d000000000000000000005"},"ts":1700000000000,"resolved":true,"level":"CRITICAL","target":{"type":"Server","id":"server-1"},"data":{"type":"FutureAlert","data":{"name":"Host A"}},"resolved_ts":1700000060000}
+          """)
+      default:
+        XCTFail("Unexpected request: \(type)")
+        return Self.response(for: request, statusCode: 400, body: "{}")
+      }
+    }
+
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let page = try await client.listAlerts(page: 2)
+    XCTAssertEqual(page.nextPage, 3)
+    XCTAssertEqual(page.alerts.first?.data.type, "FutureAlert")
+    let detail = try await client.getAlert(id: try XCTUnwrap(page.alerts.first?.id))
+    XCTAssertTrue(detail.resolved)
+    XCTAssertEqual(detail.resolvedTimestamp, 1_700_000_060_000)
+  }
+
+  func testNotificationUpdatesUseReadAPIAndExposeCompletion() async throws {
+    MockURLProtocol.handler = { request in
+      let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      let type = try XCTUnwrap(envelope["type"] as? String)
+      let params = try XCTUnwrap(envelope["params"] as? [String: Any])
+      switch type {
+      case "ListUpdates":
+        XCTAssertEqual(params["page"] as? Int, 0)
+        return Self.response(for: request, statusCode: 200, body: """
+          {"updates":[{"id":"update-1","operation":"DeployStack","start_ts":1700000000000,"success":false,"username":"000000000000000000000001","target":{"type":"Stack","id":"stack-1"},"status":"InProgress"}],"next_page":null}
+          """)
+      case "GetUpdate":
+        XCTAssertEqual(params["id"] as? String, "update-1")
+        return Self.response(for: request, statusCode: 200, body: """
+          {"_id":{"$oid":"67d000000000000000000006"},"operation":"DeployStack","start_ts":1700000000000,"end_ts":1700000060000,"success":false,"target":{"type":"Stack","id":"stack-1"},"status":"Complete","logs":[{"stage":"Deploy","success":false,"stdout":"","stderr":"failed"}]}
+          """)
+      default:
+        XCTFail("Unexpected request: \(type)")
+        return Self.response(for: request, statusCode: 400, body: "{}")
+      }
+    }
+
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let page = try await client.listUpdates()
+    XCTAssertEqual(page.updates.first?.status, "InProgress")
+    XCTAssertEqual(page.updates.first?.actorDisplayName, String(localized: "notifications.actor.procedure"))
+    let detail = try await client.getUpdate(id: "update-1")
+    XCTAssertEqual(detail.status, "Complete")
+    XCTAssertFalse(detail.success)
+    XCTAssertEqual(detail.logs.first?.stage, "Deploy")
+  }
+
+  @MainActor
+  func testNotificationBadgeCountsUnreadItemsAcrossFilteredPages() async throws {
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let defaultsName = "notifications-test-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+    defer { defaults.removePersistentDomain(forName: defaultsName) }
+    let profile = ServerProfile(
+      name: "Test", address: try ServerAddress("https://komodo.example.com"),
+      authenticationKind: .bearerToken
+    )
+    let store = NotificationInboxStore(defaults: defaults) { _, _ in client }
+    let keychain = KeychainStore(service: defaultsName)
+
+    func setResponses(includeNew: Bool) {
+      MockURLProtocol.handler = { @Sendable request in
+        let envelope = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+        )
+        let type = try XCTUnwrap(envelope["type"] as? String)
+        let params = try XCTUnwrap(envelope["params"] as? [String: Any])
+        let page = try XCTUnwrap(params["page"] as? Int)
+        let query = params["query"] as? [String: Any]
+        let filtered = query != nil
+        if filtered {
+          if type == "ListAlerts" {
+            XCTAssertEqual(query?["resolved"] as? Bool, false)
+          } else {
+            XCTAssertEqual(query?["status"] as? String, "Complete")
+            XCTAssertEqual(query?["success"] as? Bool, false)
+          }
+        }
+        let ids: [String]
+        let nextPage: String
+        if page == 0 {
+          ids = includeNew ? ["000000000000000000000003", "000000000000000000000001"]
+            : ["000000000000000000000001"]
+          nextPage = filtered ? "1" : "null"
+        } else {
+          XCTAssertEqual(page, 1)
+          ids = ["000000000000000000000002"]
+          nextPage = "null"
+        }
+        let entries = ids.map { id -> String in
+          if type == "ListAlerts" {
+            return """
+              {"_id":"\(id)","ts":1700000000000,"resolved":false,"level":"CRITICAL","target":{"type":"Server","id":"server-1"},"data":{"type":"TestAlert"}}
+              """
+          }
+          return """
+            {"id":"\(id)","operation":"DeployStack","start_ts":1700000000000,"success":false,"target":{"type":"Stack","id":"stack-1"},"status":"Complete"}
+            """
+        }.joined(separator: ",")
+        let key = type == "ListAlerts" ? "alerts" : "updates"
+        return Self.response(
+          for: request, statusCode: 200,
+          body: "{\"\(key)\":[\(entries)],\"next_page\":\(nextPage)}"
+        )
+      }
+    }
+
+    setResponses(includeNew: false)
+    await store.loadIfNeeded(profile: profile, keychainStore: keychain)
+    XCTAssertEqual(store.openAlertCount, 2)
+    XCTAssertEqual(store.unreadCount, 0)
+
+    setResponses(includeNew: true)
+    await store.refresh()
+    XCTAssertEqual(store.openAlertCount, 3)
+    XCTAssertEqual(store.unreadCount, 2)
+    store.markRead(.alert(try XCTUnwrap(store.alerts.first)))
+    XCTAssertEqual(store.unreadCount, 1)
+    store.markAllRead()
+    XCTAssertEqual(store.unreadCount, 0)
+    await store.refresh()
+    XCTAssertEqual(store.unreadCount, 0)
+  }
+
+  @MainActor
+  func testNotificationInboxRebuildsClientAfterConnectionEdit() async throws {
+    let defaultsName = "notifications-client-test-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+    defer { defaults.removePersistentDomain(forName: defaultsName) }
+    let profile = ServerProfile(
+      name: "Test", address: try ServerAddress("https://old.example.com"),
+      authenticationKind: .bearerToken
+    )
+    let oldAddress = profile.baseURL
+    let keychain = KeychainStore(service: defaultsName)
+    var clientAddresses: [String] = []
+    let store = NotificationInboxStore(defaults: defaults) { profile, _ in
+      clientAddresses.append(profile.baseURL)
+      return try self.makeClient(authentication: .bearerToken("signed-token"))
+    }
+    MockURLProtocol.handler = { request in
+      let envelope = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+      )
+      let type = try XCTUnwrap(envelope["type"] as? String)
+      let body = type == "ListAlerts"
+        ? "{\"alerts\":[],\"next_page\":null}"
+        : "{\"updates\":[],\"next_page\":null}"
+      return Self.response(for: request, statusCode: 200, body: body)
+    }
+
+    await store.loadIfNeeded(profile: profile, keychainStore: keychain)
+    profile.update(
+      name: "Test", address: try ServerAddress("https://new.example.com"),
+      authenticationKind: .bearerToken
+    )
+    let newAddress = profile.baseURL
+    await store.refresh()
+
+    XCTAssertNotEqual(oldAddress, newAddress)
+    XCTAssertEqual(clientAddresses, [oldAddress, newAddress])
+
+    let replacement = ServerProfile(
+      id: profile.id, name: "Test",
+      address: try ServerAddress("https://third.example.com"),
+      authenticationKind: .bearerToken
+    )
+    await store.connectionDidChange(profile: replacement)
+    XCTAssertEqual(clientAddresses, [oldAddress, newAddress, replacement.baseURL])
+  }
+
+  @MainActor
+  func testNotificationInboxKeepsLoadedPagesAfterRefresh() async throws {
+    let defaultsName = "notifications-pages-test-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+    defer { defaults.removePersistentDomain(forName: defaultsName) }
+    let profile = ServerProfile(
+      name: "Test", address: try ServerAddress("https://komodo.example.com"),
+      authenticationKind: .bearerToken
+    )
+    let keychain = KeychainStore(service: defaultsName)
+    let client = try makeClient(authentication: .bearerToken("signed-token"))
+    let store = NotificationInboxStore(defaults: defaults) { _, _ in client }
+
+    func setResponses(firstID: String) {
+      MockURLProtocol.handler = { request in
+        let envelope = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
+        )
+        let type = try XCTUnwrap(envelope["type"] as? String)
+        let params = try XCTUnwrap(envelope["params"] as? [String: Any])
+        let filtered = params["query"] != nil
+        let page = try XCTUnwrap(params["page"] as? Int)
+        let id = page == 0 ? firstID : "second"
+        let nextPage = page == 0 && !filtered ? "1" : "null"
+        let entry: String
+        let key: String
+        if type == "ListAlerts" {
+          key = "alerts"
+          entry = """
+            {"_id":"alert-\(id)","ts":1700000000000,"resolved":false,"level":"WARNING","target":{"type":"Server","id":"server-1"},"data":{"type":"TestAlert"}}
+            """
+        } else {
+          key = "updates"
+          entry = """
+            {"id":"update-\(id)","operation":"DeployStack","start_ts":1700000000000,"success":true,"target":{"type":"Stack","id":"stack-1"},"status":"Complete"}
+            """
+        }
+        let entries = filtered ? "" : entry
+        let body = "{\"\(key)\":[\(entries)],\"next_page\":\(nextPage)}"
+        return Self.response(for: request, statusCode: 200, body: body)
+      }
+    }
+
+    setResponses(firstID: "first")
+    await store.loadIfNeeded(profile: profile, keychainStore: keychain)
+    await store.loadMore()
+    XCTAssertEqual(store.alerts.map(\.id), ["alert-first", "alert-second"])
+    XCTAssertEqual(store.updates.map(\.id), ["update-first", "update-second"])
+
+    setResponses(firstID: "new")
+    await store.refresh()
+    XCTAssertEqual(store.alerts.map(\.id), ["alert-new", "alert-second"])
+    XCTAssertEqual(store.updates.map(\.id), ["update-new", "update-second"])
+  }
+
   private func makeClient(authentication: KomodoAuthentication) throws -> KomodoAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [MockURLProtocol.self]
