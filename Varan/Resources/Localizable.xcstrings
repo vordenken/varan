@@ -1802,6 +1802,54 @@
         }
       }
     },
+    "server.monitoring.mounts.help" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgeschlossene Einhängepunkte erscheinen nicht in Komodos Datenträgerstatistik. Die Liste bleibt auch bei pausiertem Monitoring erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluded mounts are omitted from Komodo's disk statistics. The list is preserved even when monitoring is paused."
+          }
+        }
+      }
+    },
+    "server.monitoring.validation.characters" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einhängepunkte dürfen keine Tabulatoren oder Steuerzeichen enthalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mounts must not contain tabs or control characters."
+          }
+        }
+      }
+    },
+    "server.monitoring.validation.duplicates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeder Einhängepunkt darf nur einmal vorkommen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each mount must appear only once."
+          }
+        }
+      }
+    },
     "configuration.field.ignoreServices" : {
       "localizations" : {
         "de" : {

@@ -2238,7 +2238,7 @@ struct ServerEditorView: View {
   @State private var enabled: Bool
   @State private var insecureTLS: Bool
   @State private var autoPrune: Bool
-  @State private var statsMonitoring: Bool
+  @State private var monitoringDraft: ServerMonitoringDraft
   @State private var alertDraft: ServerAlertDraft
   @State private var showingReview = false
   @StateObject private var saveGate = EditorSaveGate()
@@ -2253,7 +2253,7 @@ struct ServerEditorView: View {
     _enabled = State(initialValue: server?.config.enabled ?? true)
     _insecureTLS = State(initialValue: server?.config.insecureTLS ?? false)
     _autoPrune = State(initialValue: server?.config.autoPrune ?? false)
-    _statsMonitoring = State(initialValue: server?.config.statsMonitoring ?? true)
+    _monitoringDraft = State(initialValue: ServerMonitoringDraft(original: server?.config.displayConfiguration))
     _alertDraft = State(initialValue: ServerAlertDraft(original: server?.config.displayConfiguration))
   }
 
@@ -2273,10 +2273,10 @@ struct ServerEditorView: View {
       }
       Section("section.behavior") {
         Toggle("field.enabled", isOn: $enabled)
-        ConfigurationToggle(title: "field.statsMonitoring", isOn: $statsMonitoring, explanation: "configuration.help.statsMonitoring")
         ConfigurationToggle(title: "field.autoPrune", isOn: $autoPrune, explanation: "configuration.help.autoPrune")
         ConfigurationToggle(title: "field.insecureTLS", isOn: $insecureTLS, explanation: "configuration.help.insecureTLS")
       }
+      monitoringSection
       ServerAlertEditorSection(draft: $alertDraft)
       if !hasEditableConfiguration { Text("message.serverConfigurationIncomplete").foregroundStyle(.secondary) }
       if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
@@ -2295,10 +2295,45 @@ struct ServerEditorView: View {
     .overlay { if saveGate.isSaving { ProgressView("status.saving").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
   }
 
+  private var monitoringSection: some View {
+    Section("configuration.group.monitoring") {
+      if let value = monitoringDraft.statsMonitoring {
+        ConfigurationToggle(title: "field.statsMonitoring", isOn: Binding(
+          get: { monitoringDraft.statsMonitoring ?? value },
+          set: { monitoringDraft.statsMonitoring = $0 }
+        ), explanation: "configuration.help.statsMonitoring", identifier: "server-editor-stats-monitoring")
+      } else {
+        LabeledContent("field.statsMonitoring") { Text("configuration.value.unavailable") }
+      }
+      if let value = monitoringDraft.ignoreMountsText {
+        ConfigurationEditorField("configuration.field.ignoreMounts", explanation: "server.monitoring.mounts.help") {
+          TextEditor(text: Binding(
+            get: { monitoringDraft.ignoreMountsText ?? value },
+            set: { monitoringDraft.ignoreMountsText = $0 }
+          ))
+          .font(.system(.body, design: .monospaced))
+          .frame(minHeight: 80, maxHeight: 160)
+          .autocorrectionDisabled()
+          #if os(iOS)
+          .textInputAutocapitalization(.never)
+          #endif
+          .accessibilityLabel("configuration.field.ignoreMounts")
+          .accessibilityIdentifier("server-editor-ignore-mounts")
+        }
+      } else {
+        LabeledContent("configuration.field.ignoreMounts") { Text("configuration.value.unavailable") }
+      }
+      if let message = monitoringDraft.validationMessageKey {
+        Text(LocalizedStringKey(message)).foregroundStyle(.red)
+      }
+    }
+  }
+
   private var canSave: Bool {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
       && isValidConnectionAddress
       && hasEditableConfiguration
+      && monitoringDraft.validationMessageKey == nil
       && alertDraft.validationMessageKey == nil
       && !changedFields.isEmpty
   }
@@ -2316,7 +2351,7 @@ struct ServerEditorView: View {
   private var hasEditableConfiguration: Bool {
     guard let server else { return true }
     let fields = server.config.availableFields
-    let behaviorFields: Set<String> = ["enabled", "insecure_tls", "auto_prune", "stats_monitoring"]
+    let behaviorFields: Set<String> = ["enabled", "insecure_tls", "auto_prune"]
     return behaviorFields.isSubset(of: fields)
       && (fields.contains("external_address") || summary?.info.externalAddress != nil)
   }
@@ -2341,7 +2376,7 @@ struct ServerEditorView: View {
 
   private var changedFields: [String] {
     guard let old = server?.config else {
-      return ["field.name", "field.address", "field.externalAddress", "field.region", "section.behavior"].map { String(localized: String.LocalizationValue($0)) } + alertDraft.changedFields
+      return ["field.name", "field.address", "field.externalAddress", "field.region", "section.behavior"].map { String(localized: String.LocalizationValue($0)) } + monitoringDraft.changedFields + alertDraft.changedFields
     }
     return [
       Self.originalAddress(server: server, summary: summary) == address ? nil : String(localized: "field.address"),
@@ -2349,9 +2384,8 @@ struct ServerEditorView: View {
       Self.originalRegion(server: server, summary: summary) == region ? nil : String(localized: "field.region"),
       old.enabled == enabled ? nil : String(localized: "field.enabled"),
       old.insecureTLS == insecureTLS ? nil : String(localized: "field.insecureTLS"),
-      old.autoPrune == autoPrune ? nil : String(localized: "field.autoPrune"),
-      old.statsMonitoring == statsMonitoring ? nil : String(localized: "field.statsMonitoring")
-    ].compactMap { $0 } + alertDraft.changedFields
+      old.autoPrune == autoPrune ? nil : String(localized: "field.autoPrune")
+    ].compactMap { $0 } + monitoringDraft.changedFields + alertDraft.changedFields
   }
 
   private var patch: ServerConfigPatch {
@@ -2362,9 +2396,9 @@ struct ServerEditorView: View {
       region: Self.originalRegion(server: server, summary: summary) == region ? nil : region,
       enabled: old?.enabled == enabled ? nil : enabled,
       insecureTLS: old?.insecureTLS == insecureTLS ? nil : insecureTLS,
-      autoPrune: old?.autoPrune == autoPrune ? nil : autoPrune,
-      statsMonitoring: old?.statsMonitoring == statsMonitoring ? nil : statsMonitoring
+      autoPrune: old?.autoPrune == autoPrune ? nil : autoPrune
     )
+    monitoringDraft.apply(to: &patch)
     alertDraft.apply(to: &patch)
     return patch
   }

@@ -33,6 +33,52 @@ final class VaranUITests: XCTestCase {
   }
 
   @MainActor
+  func testServerMonitoringMountValidation() {
+    let app = launch(screen: "server")
+    defer { app.terminate() }
+    openServerMonitoringEditor(in: app)
+    let mounts = app.textViews["server-editor-ignore-mounts"]
+    XCTAssertEqual(mounts.value as? String, "/mnt/backup")
+    mounts.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    let duplicate = "/mnt/cache\n/mnt/cache"
+    mounts.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "/mnt/backup".count) + duplicate)
+    XCTAssertEqual(mounts.value as? String, duplicate)
+    XCTAssertFalse(app.buttons["Review Changes"].isEnabled)
+    let replacement = "/mnt/cache\n/Volumes/Backup Drive"
+    mounts.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: duplicate.count) + replacement)
+    XCTAssertEqual(mounts.value as? String, replacement)
+    XCTAssertTrue(app.buttons["Review Changes"].isEnabled)
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "Server monitoring editor"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  @MainActor
+  func testServerMonitoringCanonicalReload() {
+    let app = launch(screen: "server")
+    defer { app.terminate() }
+    openServerMonitoringEditor(in: app)
+    let monitoring = app.switches["server-editor-stats-monitoring"].firstMatch
+    XCTAssertEqual(monitoring.value as? String, "1")
+    monitoring.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+    XCTAssertEqual(monitoring.value as? String, "0")
+    let mounts = app.textViews["server-editor-ignore-mounts"]
+    mounts.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    let replacement = "/mnt/cache"
+    mounts.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "/mnt/backup".count) + replacement)
+    XCTAssertEqual(mounts.value as? String, replacement)
+    app.buttons["Review Changes"].tap()
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Ignored disk mounts")).firstMatch.waitForExistence(timeout: 5))
+    app.buttons["Save"].tap()
+    openServerMonitoringEditor(in: app)
+    let savedMounts = app.textViews["server-editor-ignore-mounts"]
+    XCTAssertEqual(savedMounts.value as? String, replacement)
+    XCTAssertEqual(app.switches["server-editor-stats-monitoring"].firstMatch.value as? String, "0")
+    XCTAssertFalse(app.buttons["Review Changes"].isEnabled)
+  }
+
+  @MainActor
   func testServerAlertThresholdValidationAndCanonicalReload() {
     let app = launch(screen: "server")
     openServerEditor(in: app)
@@ -469,6 +515,17 @@ final class VaranUITests: XCTestCase {
     wait(for: [enabled], timeout: 10)
     link.tap()
     XCTAssertTrue(app.navigationBars["Configuration"].waitForExistence(timeout: 5))
+  }
+
+  @MainActor
+  private func openServerMonitoringEditor(in app: XCUIApplication) {
+    openServerEditor(in: app)
+    XCTAssertTrue(app.textFields["server-editor-address-field"].waitForExistence(timeout: 5))
+    let list = app.collectionViews.firstMatch
+    let mounts = app.textViews["server-editor-ignore-mounts"]
+    for _ in 0..<3 where !mounts.exists || !mounts.isHittable { list.swipeUp() }
+    XCTAssertTrue(mounts.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.switches["server-editor-stats-monitoring"].firstMatch.exists)
   }
 
   @MainActor

@@ -786,6 +786,7 @@ struct ServerConfigPatch: Encodable, Equatable, Sendable {
   var insecureTLS: Bool? = nil
   var autoPrune: Bool? = nil
   var statsMonitoring: Bool? = nil
+  var ignoreMounts: [String]? = nil
 
   var sendUnreachableAlerts: Bool? = nil
   var sendCPUAlerts: Bool? = nil
@@ -806,6 +807,7 @@ struct ServerConfigPatch: Encodable, Equatable, Sendable {
     case insecureTLS = "insecure_tls"
     case autoPrune = "auto_prune"
     case statsMonitoring = "stats_monitoring"
+    case ignoreMounts = "ignore_mounts"
     case sendUnreachableAlerts = "send_unreachable_alerts"
     case sendCPUAlerts = "send_cpu_alerts"
     case sendMemoryAlerts = "send_mem_alerts"

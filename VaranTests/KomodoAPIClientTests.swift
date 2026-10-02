@@ -3,6 +3,148 @@ import XCTest
 @testable import Varan
 
 final class KomodoAPIClientTests: XCTestCase {
+  func testServerMonitoringDraftEmitsOnlyChangedFields() throws {
+    var draft = ServerMonitoringDraft()
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    var patch = ServerConfigPatch(region: "office")
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(region: "office"))
+    draft.statsMonitoring = false
+    draft.ignoreMountsText = " /mnt/archive \r\n\n/Volumes/Backup Drive\nC:\\"
+    XCTAssertNil(draft.validationMessageKey)
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(region: "office", statsMonitoring: false,
+      ignoreMounts: ["/mnt/archive", "/Volumes/Backup Drive", "C:\\"]))
+    XCTAssertEqual(draft.changedFields.count, 2)
+  }
+
+  func testServerMonitoringDraftPreservesMissingAndNullFields() throws {
+    for json in [#"{}"#, #"{"stats_monitoring":null,"ignore_mounts":null}"#] {
+      let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(json.utf8))
+      var draft = ServerMonitoringDraft(original: configuration)
+      XCTAssertNil(draft.statsMonitoring)
+      XCTAssertNil(draft.ignoreMountsText)
+      draft.statsMonitoring = false
+      draft.ignoreMountsText = "/mnt/archive"
+      XCTAssertTrue(draft.changedFields.isEmpty)
+      XCTAssertNil(draft.validationMessageKey)
+      var patch = ServerConfigPatch()
+      draft.apply(to: &patch)
+      XCTAssertEqual(patch, ServerConfigPatch())
+    }
+  }
+
+  func testServerMonitoringDraftEditsAvailableFieldsIndependently() throws {
+    for json in [#"{"stats_monitoring":false}"#, #"{"ignore_mounts":[]}"#] {
+      let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(json.utf8))
+      var draft = ServerMonitoringDraft(original: configuration)
+      draft.statsMonitoring = true
+      draft.ignoreMountsText = "/mnt/archive"
+      var patch = ServerConfigPatch()
+      draft.apply(to: &patch)
+      XCTAssertEqual(draft.changedFields.count, 1)
+      if configuration.statsMonitoring != nil {
+        XCTAssertEqual(patch, ServerConfigPatch(statsMonitoring: true))
+      } else {
+        XCTAssertEqual(patch, ServerConfigPatch(ignoreMounts: ["/mnt/archive"]))
+      }
+    }
+  }
+
+  func testServerMonitoringDraftDistinguishesUnchangedAndClearedLists() throws {
+    let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(
+      #"{"stats_monitoring":false,"ignore_mounts":["/mnt/archive","/Volumes/Backup Drive"]}"#.utf8
+    ))
+    var draft = ServerMonitoringDraft(original: configuration)
+    XCTAssertEqual(draft.statsMonitoring, false)
+    draft.ignoreMountsText = " /mnt/archive \n\n/Volumes/Backup Drive\n"
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    var patch = ServerConfigPatch()
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch())
+    draft.ignoreMountsText = " \r\n"
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(ignoreMounts: []))
+    let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(patch)) as? [String: Any])
+    XCTAssertEqual(Set(fields.keys), ["ignore_mounts"])
+    XCTAssertEqual(fields["ignore_mounts"] as? [String], [])
+    XCTAssertEqual(draft.changedFields.count, 1)
+  }
+
+  func testServerMonitoringDraftRejectsDuplicateMountsAndControlCharacters() {
+    for (input, key) in [
+      ("/mnt/archive\n /mnt/archive ", "server.monitoring.validation.duplicates"),
+      ("/mnt/ar\u{0}chive", "server.monitoring.validation.characters"),
+      ("/mnt/archive\t", "server.monitoring.validation.characters"),
+      ("/mnt/ar\u{7f}chive", "server.monitoring.validation.characters")
+    ] {
+      var draft = ServerMonitoringDraft()
+      draft.statsMonitoring = false
+      draft.ignoreMountsText = input
+      XCTAssertEqual(draft.validationMessageKey, key)
+      var patch = ServerConfigPatch()
+      draft.apply(to: &patch)
+      XCTAssertEqual(patch, ServerConfigPatch())
+    }
+  }
+
+  func testServerMonitoringDraftPreservesLegacyListsDuringUnrelatedEdits() throws {
+    for mounts in [["/mnt/archive", "/mnt/archive"], [" /mnt/old ", "C:\\"], ["/mnt/ar\tchive"]] {
+      let data = try JSONSerialization.data(withJSONObject: ["stats_monitoring": true, "ignore_mounts": mounts])
+      let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: data)
+      var draft = ServerMonitoringDraft(original: configuration)
+      XCTAssertTrue(draft.changedFields.isEmpty)
+      draft.statsMonitoring = false
+      XCTAssertNil(draft.validationMessageKey)
+      var patch = ServerConfigPatch()
+      draft.apply(to: &patch)
+      XCTAssertEqual(patch, ServerConfigPatch(statsMonitoring: false))
+    }
+  }
+
+  func testServerMonitoringDraftAcceptsLegacyNewlineList() throws {
+    let configuration = try JSONDecoder().decode(ServerConfigurationDetails.self, from: Data(
+      #"{"stats_monitoring":true,"ignore_mounts":"/mnt/archive\n/Volumes/Backup Drive"}"#.utf8
+    ))
+    var draft = ServerMonitoringDraft(original: configuration)
+    XCTAssertTrue(draft.changedFields.isEmpty)
+    draft.ignoreMountsText = "/mnt/new"
+    var patch = ServerConfigPatch()
+    draft.apply(to: &patch)
+    XCTAssertEqual(patch, ServerConfigPatch(ignoreMounts: ["/mnt/new"]))
+  }
+
+  func testServerMonitoringSettingsUseWriteEndpointAndCanonicalRead() async throws {
+    var operations: [String] = []
+    MockURLProtocol.handler = { request in
+      let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any])
+      let operation = try XCTUnwrap(body["type"] as? String)
+      operations.append(operation)
+      let params = try XCTUnwrap(body["params"] as? [String: Any])
+      if operation == "UpdateServer" {
+        XCTAssertEqual(request.url?.path, "/write")
+        XCTAssertEqual(params["id"] as? String, "server-1")
+        let config = try XCTUnwrap(params["config"] as? [String: Any])
+        XCTAssertEqual(Set(config.keys), ["stats_monitoring", "ignore_mounts"])
+        XCTAssertEqual(config["stats_monitoring"] as? Bool, false)
+        XCTAssertEqual(config["ignore_mounts"] as? [String], ["/mnt/archive", "/Volumes/Backup Drive"])
+        return Self.response(for: request, statusCode: 200, body: #"{"_id":"server-1","name":"home","config":{}}"#)
+      }
+      XCTAssertEqual(operation, "GetServer")
+      XCTAssertEqual(request.url?.path, "/read")
+      XCTAssertEqual(params["server"] as? String, "server-1")
+      return Self.response(for: request, statusCode: 200, body: #"{"_id":"server-1","name":"home","config":{"stats_monitoring":false,"ignore_mounts":["/mnt/canonical"]}}"#)
+    }
+    let client = try makeClient(authentication: .bearerToken("test-token"))
+    let saved = try await client.updateServer(id: "server-1", config: ServerConfigPatch(
+      statsMonitoring: false, ignoreMounts: ["/mnt/archive", "/Volumes/Backup Drive"]
+    ))
+    let canonical = try await client.getServer(idOrName: saved.id)
+    XCTAssertEqual(operations, ["UpdateServer", "GetServer"])
+    XCTAssertEqual(canonical.config.displayConfiguration.statsMonitoring, false)
+    XCTAssertEqual(canonical.config.displayConfiguration.ignoreMounts?.values, ["/mnt/canonical"])
+  }
+
   func testServerAlertDraftEmitsOnlyChangedTypedFields() throws {
     var draft = ServerAlertDraft()
     XCTAssertTrue(draft.changedFields.isEmpty)

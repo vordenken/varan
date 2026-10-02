@@ -1,5 +1,12 @@
-0.7.0
+0.8.0
 ---
+### Development Preview
+- Added Server monitoring and ignored disk mount editing with validated,
+  typed partial writes, change review, explicit clearing, and canonical reload
+- Preserved omitted monitoring fields and existing mount exclusions when
+  monitoring is disabled or unrelated Server settings are edited
+
+## 0.7.0
 ### Development Preview
 - Moved read-only Server configuration details to a separate page opened from
   the Server overview, so the detail view no longer shifts while loading
