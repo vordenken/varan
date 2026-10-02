@@ -100,6 +100,21 @@ Feature: Browse and manage Komodo resources
     Then Varan sends only the changed fields through the write API
     And the canonical server is loaded again after the write succeeds
 
+  Scenario: Change server monitoring and excluded disk mounts
+    Given the server exposes its monitoring settings and ignored disk mounts
+    When I change monitoring or the mount exclusions
+    Then duplicate mounts and control characters prevent saving
+    And the change review includes only settings that actually changed
+    And clearing the exclusions sends an explicit empty list
+    And disabling monitoring preserves the existing exclusions
+    And the canonical server is loaded again after the write succeeds
+
+  Scenario: Preserve unavailable server monitoring settings
+    Given the server omits a monitoring setting from its configuration response
+    When I edit another available server setting
+    Then the missing setting is shown as unavailable
+    And it is not replaced by a default or included in the write payload
+
   Scenario: Edit configuration related to a container
     Given a container is owned by a stack service
     When I choose to edit its configuration

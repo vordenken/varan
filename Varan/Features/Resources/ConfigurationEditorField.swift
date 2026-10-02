@@ -58,10 +58,12 @@ struct ConfigurationToggle: View {
   let title: String
   @Binding var isOn: Bool
   let explanation: String
+  var identifier: String? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Toggle(LocalizedStringKey(title), isOn: $isOn)
+        .accessibilityIdentifier(identifier ?? "configuration-editor-\(title)")
       Text(LocalizedStringKey(explanation))
         .font(.caption)
         .foregroundStyle(.secondary)

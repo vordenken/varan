@@ -161,6 +161,10 @@ struct ProtectedConfigurationContent: Decodable, Equatable, Sendable {
 struct ConfigurationStringList: Decodable, Equatable, Sendable {
   let values: [String]
 
+  init(values: [String]) {
+    self.values = values
+  }
+
   init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
     if let text = try? container.decode(String.self) {
